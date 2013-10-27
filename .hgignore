@@ -1,3 +1,4 @@
+oauth2client
 *.py[co]
 *.pyc-2.4
 .*~
