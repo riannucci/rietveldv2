@@ -16,7 +16,7 @@ for path in locations:
 endef
 # /Helper
 
-APPID?= `cat app.yaml | sed -n 's/^application: *//p'`
+APPID?="testfoo-codereview"
 
 SDK_PATH ?= $(shell python -c '$(DETECT_SDK)')
 
@@ -26,14 +26,7 @@ DEV_APPSERVER_FLAGS?=
 APPCFG?= $(if $(SDK_PATH), $(SDK_PATH)/,)appcfg.py
 APPCFG_FLAGS?=
 
-# Set dirty suffix depending on output of "hg status".
-dirty=
-ifneq ($(shell hg status),)
-        dirty="-tainted"
-endif
-VERSION_TAG= `hg parents --template='{rev}:{node|short}'`$(dirty)
-# AppEngine version cannot use ':' in its name so use a '-' instead.
-VERSION?= `hg parents --template='{rev}-{node|short}'`$(dirty)
+VERSION_TAG=`git describe --all --long --dirty | sed 's+heads/++' | sed 's+_+--+'`
 
 PYTHON?= python2.7
 COVERAGE?= coverage
@@ -66,11 +59,11 @@ update_revision:
 
 update: update_revision mapreduce update_backend
 	@echo "---[Updating $(APPID)]---"
-	$(APPCFG) $(APPCFG_FLAGS) update . --oauth2 --application $(APPID) --version $(VERSION)
+	$(APPCFG) $(APPCFG_FLAGS) update . --oauth2 --application $(APPID) --version $(VERSION_TAG)
 
 update_backend: update_revision mapreduce
 	@echo "---[Updating backend $(APPID)]---"
-	$(APPCFG) $(APPCFG_FLAGS) backends update . --oauth2 --application $(APPID) --version $(VERSION)
+	$(APPCFG) $(APPCFG_FLAGS) backends update . --oauth2 --application $(APPID) --version $(VERSION_TAG)
 
 upload: update
 
