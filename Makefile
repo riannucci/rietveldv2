@@ -26,7 +26,7 @@ DEV_APPSERVER_FLAGS?=
 APPCFG?= $(if $(SDK_PATH), $(SDK_PATH)/,)appcfg.py
 APPCFG_FLAGS?=
 
-VERSION_TAG=`git describe --all --long --dirty | sed 's+heads/++' | sed 's+_+--+'`
+VERSION_TAG=`git describe --all --long --dirty | sed 's+heads/++' | sed 's+_+--+g'`
 
 PYTHON?= python2.7
 COVERAGE?= coverage
