@@ -1,0 +1,5 @@
+class CASError(Exception):
+  pass
+
+
+
