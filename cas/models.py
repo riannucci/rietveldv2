@@ -3,8 +3,8 @@ import hashlib
 import itertools
 import logging
 
-from google.appengine.datastore import datastore_query
 from google.appengine.ext import ndb
+from google.appengine.ext.ndb import polymodel
 
 from . import common
 from . import types
@@ -24,6 +24,7 @@ class CAS_ID(object):
   HASH_ALGO = hashlib.sha256
   CSUM_SIZE = HASH_ALGO().digest_size
 
+  #### Constructors
   def __init__(self, csum, size, data_type):
     assert csum and size and data_type
 
@@ -62,29 +63,61 @@ class CAS_ID(object):
     csum.update(data_type)
     return cls(csum.digest(), len(data), data_type)
 
-  def as_key(self):
+  #### Data accessors
+  def entry_async(self):
+    return self.key.get_async()
+
+  def raw_data_async(self):
+    return CASEntry.raw_data_async(self.key)
+
+  def data_async(self, type_map=None):
+    return CASEntry.data_async(self.key, type_map)
+
+  #### Output conversion
+  @utils.cached_property
+  def key(self):
     return ndb.Key(CASEntry, str(self))
+
+  def to_dict(self):
+    return {'csum': self.csum.encode('hex'), 'size': self.size,
+            'data_type': self.data_type}
 
   def __str__(self):
     return "%(csum)s:%(size)s:%(data_type)s" % self.__dict__
 
 
-# All CASData* classes must have at least a 'timestamp' ndb.Property, and a
-# 'data' property (could be a python @property, or an ndb.Property).
-#
-# CASEntry promotes the most-recent CASData* entity which is a decendent of
-# itself to be the 'current' data.
-#
-# The split is necessary, because there's no way to do an ndb.get_multi with
-# keys_only=True, which means validating the presence of large numbers of
-# CASEntry's with integrated data will load way too much data into the
-# frontend.
-class CASDataInline(ndb.Model):
-  # Prevent this model from going into ndb's in-process cache
-  _use_cache = False
+class CAS_IDProperty(ndb.KeyProperty):
+  # Pylint thinks this is an old-style class, but it's not really.
+  # pylint: disable=E1002
+  def __init__(self, data_type, *args, **kwargs):
+    kwargs['kind'] = CASEntry
+    super(CAS_IDProperty, self).__init__(*args, **kwargs)
+    self.data_type = data_type
 
-  data = ndb.BlobProperty(compressed=True)
+  def _to_base_type(self, value):
+    assert isinstance(value, CAS_ID)
+    assert value.data_type == self.data_type
+    return value.key
+
+  def _from_base_type(self, value):
+    return CAS_ID.fromkey(value)
+
+
+class CASData(polymodel.PolyModel):
+  # pylint: disable=R0922
   timestamp = ndb.DateTimeProperty(auto_now_add=True)
+
+  @utils.cached_property
+  def data_async(self):
+    raise NotImplementedError()
+
+
+class CASDataInline(CASData):
+  data = ndb.BlobProperty(compressed=True)
+
+  @utils.cached_property
+  def data_async(self):
+    return utils.completed_future(self.data)
 
 # TODO(iannucci): Implement other data storage methods.
 
@@ -100,25 +133,29 @@ class CASEntry(ndb.Model):
   def cas_id(self):  # pylint: disable=E0202
     return CAS_ID.fromkey(self.key())
 
+  @staticmethod
+  def _verify_async(data_type, data, type_map=None, check_refs=True):
+    if type_map is None:
+      from . import default_data_types
+      type_map = default_data_types.TYPE_MAP
+    assert isinstance(type_map, types.CASTypeRegistry)
+    if data_type not in type_map:
+      raise CASUnknownDataType(type_map, data_type)
+    return type_map[data_type](data, check_refs=check_refs)
+
   @classmethod
-  def create(cls, csum, data, data_type, type_map=None):
+  @ndb.transactional_tasklet(retries=0)  # pylint: disable=E1120
+  def create_async(cls, csum, data, data_type, type_map=None):
     """Create a new, validated CASEntry object, and return an async_put for
     it.
 
     It is an error to create() an existing CASEntry.
     """
+    cls.no_extra(data)
     # TODO(iannucci): Implement delayed validation by storing the object as
     # an UnvalidatedCASEntry, and then fire a taskqueue task to promote it to
     # a CASEntry when it's ripe.
-    if type_map is None:
-      from . import default_data_types
-      type_map = default_data_types.TYPE_MAP
-    assert isinstance(type_map, types.CASTypeRegistry)
-
-    if data_type not in type_map:
-      raise CASUnknownDataType(type_map, data_type)
-
-    type_map[data_type](data)
+    yield cls._verify_async(data_type, data, type_map)
 
     cas_id = CAS_ID.fromdata(data, data_type)
     if cas_id.csum != csum:
@@ -129,21 +166,16 @@ class CASEntry(ndb.Model):
     entry.cas_id = cas_id  # We already computed it, so don't don't waste it
     key = entry.key
 
-    def txn():
-      if key.get() is not None:
-        logging.error("Attempted to create('%s') which already exists" % csum)
-        raise common.CASError("CASEntry('%s') already exists." % csum)
-      new_key = entry.put()
-      assert key == new_key
-
+    if key.get() is not None:
+      logging.error("Attempted to create('%s') which already exists" % csum)
+      raise common.CASError("CASEntry('%s') already exists." % csum)
+    new_key, _ = yield [
+      entry.put_async(),
       # TODO(iannucci): Implement other data storage methods.
-      CASDataInline(parent=key, data=data).put()
-      return entry
-    return ndb.transaction_async(txn, retries=0)
-
-  @classmethod
-  def get_by_csum_async(cls, csum):
-    return cls.query(cls.csum == csum).get_async()
+      CASDataInline(parent=key, id=1, data=data).put_async()
+    ]
+    assert key == new_key
+    raise ndb.Return(entry)
 
   @classmethod
   @ndb.tasklet
@@ -165,22 +197,27 @@ class CASEntry(ndb.Model):
       ret[key].append(cas_id)
     raise ndb.Return(ret)
 
-  @utils.cached_property
-  def data(self):
+  @utils.hybridmethod
+  @ndb.tasklet
+  def raw_data_async((self, _cls), key=None):
     """Retrieves the actual Data entity for this CASEntry.
 
-    This is defined as the last-written decendant of this CASEntry. It will
-    be one of:
+    This is defined as the CASData decendant with an id of 1. This may be:
       * CASDataInline
-
-    All of these entities have a .data member which will be the actual data
-    contained.
     """
-    return (
-      ndb.Query()
-      .ancestor(self)
-      .order(
-        datastore_query.PropertyOrder('timestamp'),
-        datastore_query.PropertyOrder.DESCENDING
-      )
-    ).fetch_async(1)
+    key = key or self.key
+    data_key = ndb.Key(pairs=key.pairs() + ('CASData', 1))
+    data_obj = yield data_key.get_async()
+    raise ndb.Return((yield data_obj.data_async))
+
+  @utils.hybridmethod
+  @ndb.tasklet
+  def data_async((self, cls), key=None, type_map=None):
+    key = key or self.key
+    data = yield cls.raw_data_async(key)
+    cas_id = CAS_ID.fromkey(key)
+
+    # pylint: disable=W0212
+    ret = yield cls._verify_async(cas_id.data_type, data, type_map,
+                                  check_refs=False)
+    raise ndb.Return(ret)

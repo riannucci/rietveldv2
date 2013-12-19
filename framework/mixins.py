@@ -1,6 +1,6 @@
 from google.appengine.ext import ndb
 
-from . import utils
+from . import utils, authed_model
 
 
 class HierarchyMixin(object):
@@ -22,10 +22,6 @@ class HierarchyMixin(object):
     else:
       return k.get_async()
 
-
-class EntityTreeMixin(HierarchyMixin):
-  AutoMeta = object()
-
   @utils.cached_property
   @ndb.tasklet
   def dirty_entities_async(self):
@@ -40,17 +36,14 @@ class EntityTreeMixin(HierarchyMixin):
       raise ndb.Return(ret)
 
   @ndb.tasklet
-  def mark_async(self, operation='write', meta=AutoMeta):
-    # Metadata doesn't cause its parents to become dirty.
-    if meta is self.AutoMeta:
-      meta = self.__class__.__name__.lower().endswith('metadata')
-
+  def mark_async(self, operation='write', meta=False):
     dirty = yield self.dirty_entities_async
     dirty[operation].add(self)
 
-    parent = yield self.parent_async
-    if parent is not self and not meta:
-      yield parent.mark_async(operation, meta)
+    if not meta:
+      parent = yield self.parent_async
+      if parent is not self:
+        yield parent.mark_async(operation, meta)
 
   @ndb.tasklet
   def clear_marks_async(self):
@@ -72,7 +65,7 @@ class EntityTreeMixin(HierarchyMixin):
     yield self.clear_marks_async()
 
 
-class HideableModel(ndb.Model, EntityTreeMixin):
+class HideableModelMixin(authed_model.AuthedModel, HierarchyMixin):
   hidden = ndb.BooleanProperty(default=False)
 
   def delete_async(self):
@@ -80,20 +73,20 @@ class HideableModel(ndb.Model, EntityTreeMixin):
     return self.mark_async()
 
   def query(self, *args, **kwargs):
-    ret = super(HideableModel, self).query(*args, **kwargs)
-    return ret.filter(HideableModel.hidden == False)
+    ret = super(HideableModelMixin, self).query(*args, **kwargs)
+    return ret.filter(HideableModelMixin.hidden == False)
 
   @classmethod
   @ndb.tasklet
   def get_by_id_async(cls, *args, **kwargs):
-    ret = yield super(HideableModel, cls).get_by_id_async(*args, **kwargs)
+    ret = yield super(HideableModelMixin, cls).get_by_id_async(*args, **kwargs)
     if ret is None or ret.hidden:
       raise ndb.Return(None)
     raise ndb.Return(ret)
 
   @classmethod
   def get_by_id(cls, *args, **kwargs):
-    ret = super(HideableModel, cls).get_by_id(*args, **kwargs)
+    ret = super(HideableModelMixin, cls).get_by_id(*args, **kwargs)
     if ret is None or ret.hidden:
       return None
     return ret
@@ -101,6 +94,7 @@ class HideableModel(ndb.Model, EntityTreeMixin):
   def _post_query_filter(self):
     return (
       not self.hidden and
-      super(HideableModel, self)._post_query_filter())
+      super(HideableModelMixin, self)._post_query_filter())
 
-
+  def can_read(self):
+    return super(HideableModelMixin, self).can_read() and not self.hidden

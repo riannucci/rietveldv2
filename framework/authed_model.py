@@ -2,9 +2,8 @@ from google.appengine.ext import ndb
 
 from . import exceptions
 from . import utils
-from . import query_hooks
 
-query_hooks.monkeypatch()
+from .monkeypatch import query_hooks  # pylint: disable=W0611
 
 class AuthedModel(ndb.Model):
   """Allows a derived model to automatically restrict its access permissions
@@ -65,6 +64,33 @@ class AuthedModel(ndb.Model):
     self._permissions_cache = {}
     self._in_datastore = False
 
+  #### Classmethod Stubs
+  @classmethod
+  def can_read_key(cls, _key):
+    return cls.Dunno
+
+  @classmethod
+  def can_update_key(cls, _key):
+    return cls.Dunno
+
+  @classmethod
+  def can_create_key(cls, _key):
+    return cls.Dunno
+
+  @classmethod
+  def can_delete_key(cls, _key):
+    return cls.Dunno
+
+  #### Instance Stubs
+  def can_read(self):
+    return False
+
+  def can_update(self):
+    return False
+
+  def can_delete(self):
+    return False
+
   #### Methods
   @utils.hybridmethod
   def can((self, cls), perm, key=None, lazy=False):
@@ -74,14 +100,14 @@ class AuthedModel(ndb.Model):
       assert key is None
       key = self.key
 
-    rslt = getattr(cls, 'can_%s_key' % perm, lambda k: cls.Dunno)(key)
+    rslt = getattr(cls, 'can_%s_key' % perm)(key)
     if rslt is cls.Dunno and not lazy:
       if self is None:
         self = key.get()  # relies on ndb's cache to make this speedy
         assert isinstance(self, cls)  # that would be pretty weird
         if perm in self._permissions_cache:
           return self._permissions_cache[perm]
-      rslt = getattr(self, 'can_%s' % perm, lambda: False)
+      rslt = getattr(self, 'can_%s' % perm)()
       assert rslt is not cls.Dunno
     if self is not None:
       self._permissions_cache[perm] = rslt

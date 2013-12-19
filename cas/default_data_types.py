@@ -1,5 +1,7 @@
 from . import types
 
+from ..framework import utils
+
 
 TYPE_MAP = types.CASTypeRegistry()
 
@@ -9,7 +11,7 @@ def text_universal_utf8(data):
   """Like text/plain, but all lines are deliniated by \\n."""
   decoded = data.decode('utf-8')
   assert '\r' not in decoded
-  return decoded
+  return utils.completed_future(decoded)
 
 
 TYPE_MAP('image/gif')
@@ -32,21 +34,21 @@ def image_svg_xml(data):
   # TODO(iannucci): Use real SVG schema?
   root = TYPE_MAP['application/xml'](data)
   assert root.tag == 'svg'
-  return root
+  return utils.completed_future(root)
 
 
 TYPE_MAP('application/json')
 def application_json(data):
   import json
-  return json.loads(data)
+  return utils.completed_future(json.loads(data))
 
 
 TYPE_MAP('application/octet-stream')
-def application_octet_stream(data):
-  return data
+def application_octet_stream(_data):
+  pass
 
 
 TYPE_MAP('application/xml')
 def application_xml(data):
   from lxml import etree as ElementTree
-  return ElementTree.fromstring(data)
+  return utils.completed_future(ElementTree.fromstring(data))

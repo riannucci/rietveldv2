@@ -1,6 +1,8 @@
 import functools
 import logging
 
+from google.appengine.ext import ndb
+
 from . import common
 
 
@@ -51,13 +53,19 @@ class CASTypeRegistry(dict):
       work with in the python context. If f returns None, the wrapper function
       will return |data| instead, as a convenience.
       """
+      @ndb.tasklet
       @functools.wraps(f)
-      def wrapped(data):
+      def wrapped(data, check_refs=True):
         try:
-          ret = f(data)
+          ret = yield f(data)
           if ret is None:
             ret = data
-          return ret
+          elif (check_refs and
+                ret is not data and
+                hasattr(ret, 'CAS_REFERENCES')):
+            entries = yield [cid.entry_async for cid in ret.CAS_REFERENCES]
+            assert None not in entries
+          raise ndb.Return(ret)
         except:
           # Log exception for debugging, but neuter the raised exception to
           # avoid leakage of implementation details.
