@@ -17,12 +17,7 @@
 # NOTE: Must import *, since Django looks for things here, e.g. handler500.
 from django.conf.urls.defaults import *
 
-# If you don't want to run Rietveld from the root level, add the
-# subdirectory as shown in the following example:
-#
-#    url(r'subpath/', include('codereview.urls')),
-#
-urlpatterns = patterns(
-    '',
-    url(r'', include('codereview.urls')),
-    )
+from framework import rest_handler
+from codereviewv2 import auth_api, issue_api
+
+urlpatterns = rest_handler.generate_urlpatterns_for_all()

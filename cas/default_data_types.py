@@ -1,6 +1,6 @@
 from . import types
 
-from ..framework import utils
+from framework import utils
 
 
 TYPE_MAP = types.CASTypeRegistry()

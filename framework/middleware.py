@@ -116,6 +116,8 @@ class JSONMiddleware(Middleware):
 
   def post(self, request, result):
     result = result or {}
+    if isinstance(result, HttpResponse):
+      return result
     assert isinstance(result, dict)
     code = result.pop(STATUS_CODE, 200)
     if 'status' not in result:

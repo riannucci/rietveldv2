@@ -8,7 +8,7 @@ from django.core.urlresolvers import reverse
 
 import jinja2
 
-from ..framework import middleware, handler, exceptions, query_parser, utils
+from framework import middleware, handler, exceptions, query_parser, utils
 
 from . import issue_models
 from .auth_models import Account

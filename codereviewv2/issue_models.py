@@ -5,8 +5,8 @@ from google.appengine.api import taskqueue, users, mail
 from google.appengine.ext import ndb
 from google.appengine.ext.ndb import metadata
 
-from .. import cas
-from ..framework import utils, mixins, exceptions, rest_handler
+import cas
+from framework import utils, mixins, exceptions, authed_model
 
 from . import auth_models, diff
 
@@ -61,12 +61,15 @@ class Content(diff.Diffable):
 
 
 class Patch(diff.DiffablePair):
-  def __init__(self, id, patch):
+  @classmethod
+  def from_dict(cls, id, patch):
     old = Content(patch.pop('old')) if 'old' in patch else None
     new = Content(patch.pop('new')) if 'new' in patch else None
     action = patch.pop('action', None)
     assert not patch
+    return cls(id, old, new, action)
 
+  def __init__(self, id, old, new, action):
     super(Patch, self).__init__(old, new, action)
     self.id = id
     self.comments = []
@@ -74,6 +77,13 @@ class Patch(diff.DiffablePair):
     self.prev = None
     self.next_with_comment = None
     self.prev_with_comment = None
+
+  def get_data_futures(self):
+    return [self.old.data_async, self.new.data_async]
+
+  @utils.cached_property
+  def size(self):
+    return self.old.size + self.new.size
 
   def to_dict(self):
     r = super(Patch, self).to_dict()
@@ -121,10 +131,11 @@ def patchset_json(data):
   parsed = cas.DEFAULT_TYPE_MAP['application/json'](data)
   assert ['patches'] == parsed.keys()
   assert parsed['patches']
-  return PatchList(Patch(i, p) for i, p in enumerate(parsed['patches']))
+  return PatchList(Patch.from_dict(i, p)
+                   for i, p in enumerate(parsed['patches']))
 
 
-class Issue(rest_handler.RESTModelMixin, mixins.HideableModelMixin):
+class Issue(mixins.HideableModelMixin):
   # Old Issue models won't have a VERSION field at all
   VERSION = ndb.IntegerProperty(default=2, indexed=False)
 
@@ -395,7 +406,7 @@ class Comment(ndb.Model):
     ret['id'] = self.id
 
 
-class Patchset(rest_handler.RESTModelMixin, mixins.HideableModelMixin):
+class Patchset(mixins.HideableModelMixin):
   message = ndb.TextProperty(indexed=False)
   data_ref = cas.models.CAS_IDProperty(PATCHSET_TYPE)
 
@@ -408,7 +419,7 @@ class Patchset(rest_handler.RESTModelMixin, mixins.HideableModelMixin):
                                              compressed=True)
 
   #### Datastore Read Functions
-  @utils.cached_property
+  @utils.clearable_cached_property
   @ndb.tasklet
   def patches_async(self):
     all_patches = yield self.data_ref.data_async()
@@ -481,7 +492,7 @@ class Patchset(rest_handler.RESTModelMixin, mixins.HideableModelMixin):
             self.root_async.get_result().can('read'))
 
 
-class Message(rest_handler.RESTModelMixin):
+class Message(authed_model.AuthedModel):
   subject = ndb.StringProperty(indexed=False)
   sender = auth_models.UserProperty(auto_current_user_add=True, indexed=False)
   recipients = LowerEmailProperty(indexed=False, repeated=True)
@@ -526,8 +537,8 @@ class DraftComment(Comment):
     super(DraftComment, self).populate(**data)
 
 
-class IssueMetadata(rest_handler.RESTModel):
-  raw_drafts = ndb.LocalStructuredPropert(DraftComment, repeated=True)
+class IssueMetadata(authed_model.AuthedModel):
+  raw_drafts = ndb.LocalStructuredProperty(DraftComment, repeated=True)
 
   had_updates = ndb.BooleanProperty()
   acknowledged_messages = ndb.IntegerProperty(repeated=True)
@@ -560,7 +571,7 @@ class IssueMetadata(rest_handler.RESTModel):
   #### Properties
   @utils.cached_property
   def drafts(self):
-    for i, d in enumerate(self.drafts):
+    for i, d in enumerate(self.raw_drafts):
       d.id = i
     return self.drafts
 

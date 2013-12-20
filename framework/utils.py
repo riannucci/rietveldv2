@@ -140,6 +140,8 @@ class _cached_assignable_property(object):
     return ''.join(traceback.format_list(stack))
 
   def __get__(self, inst, cls=None):
+    if inst is None:
+      return self
     if not hasattr(inst, self._iname):
       val = self.func(inst)
       # Some methods call out to another layer to calculate the value. This

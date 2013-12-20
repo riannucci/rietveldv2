@@ -10,14 +10,16 @@ class RequestHandler(object):
   """Kinda-sorta like webapp2.RequestHandler."""
   _KNOWN_METHODS = frozenset(('get', 'head', 'post', 'put', 'delete'))
 
-  TRANSACTIONAL = ndb.trasactional
+  def __init__(self, middleware=(), **methods):
+    assert set(methods.iterkeys()).issubset(self._KNOWN_METHODS)
+    for method_name, func in methods.iteritems():
+      assert callable(func)
+      setattr(self, method_name, func)
 
-  def __init__(self):
     self.OK_METHODS = [x.upper() for x in dir(self) if x in self._KNOWN_METHODS]
 
     # Your subclass should set these
-    self.MIDDLEWARE = [] # list of Middleware instances.
-    self.ROUTES = []  # [(<route_name:str>, <regex:str>)]
+    self.MIDDLEWARE = middleware # list of Middleware instances.
 
   @staticmethod
   def _is_exc_info(data):
@@ -50,8 +52,5 @@ class RequestHandler(object):
     if handler_fn is None:
       return HttpResponseNotAllowed(self.OK_METHODS)
 
-    processor = self._process_request
-    if self.TRANSACTIONAL:
-      processor = self.TRANSACTIONAL(processor)
-
-    return processor(handler_fn, self.MIDDLEWARE, request, *args, **kwargs)
+    return self._process_request(
+      handler_fn, self.MIDDLEWARE, request, *args, **kwargs)

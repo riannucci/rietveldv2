@@ -1,6 +1,3 @@
-import time
-import hashlib
-import os
 import logging
 
 from google.appengine.api import oauth
@@ -9,8 +6,8 @@ from google.appengine.ext import ndb
 
 from django.conf import settings
 
-from ..framework import utils
-from ..framework.authed_model import AuthedModel
+from framework import xsrf
+from framework.authed_model import AuthedModel
 
 EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email'
 
@@ -44,7 +41,7 @@ def _get_current_rietveld_oauth_user():
     logging.warning('A Client ID was retrieved with no corresponsing user.')
 
 
-def _get_current_user():
+def get_current_user():
   """Gets the current user associated with a request.
 
   First tries to verify a user with the Users API (cookie-based auth), and then
@@ -142,7 +139,7 @@ class UserProperty(ndb.UserProperty):
     """
     if (self._auto_current_user or
         (self._auto_current_user_add and not self._has_value(entity))):
-      value = _get_current_user()
+      value = get_current_user()
       if value is not None:
         self._store_value(entity, value)
 
@@ -151,13 +148,9 @@ class UserProperty(ndb.UserProperty):
 
 
 class Account(AuthedModel):
-  XSRF_TOKEN_ALGO = hashlib.sha1
-  TARGET_XSRF_SECRET_SIZE = XSRF_TOKEN_ALGO().digest_size
   CONTEXT_CHOICES = (3, 10, 25, 50, 75, 100)
 
   user = UserProperty(auto_current_user_add=True, required=True)
-  xsrf_secret = ndb.BlobProperty()
-  xsrf_secret_size = ndb.ComputedProperty(lambda self: len(self.xsrf_secret))
 
   ### Preferences
   nickname = ndb.StringProperty()
@@ -188,38 +181,13 @@ class Account(AuthedModel):
   created = ndb.DateTimeProperty(auto_now_add=True)
   modified = ndb.DateTimeProperty(auto_now=True)
 
-  @utils.cached_property
-  def _xsrf_tokens(self):
-    import hmac
-    now = time.time()
-
-    base = hmac.new(self.xsrf_secret,
-                    self.lower_email.encode('utf-8'),
-                    self.XSRF_TOKEN_ALGO)
-    old, new = base, base.copy()
-
-    hour = int(now) // 3600
-    new.update(hour)
-    new = new.hexdigest()
-
-    # If we switched hours within a 5 minute window, calculate the old one too
-    if (now - (5 * 60)) // 3600 != hour:
-      old.update(hour - 1)
-      old = old.hexdigest()
-    else:
-      old = None
-    return old, new
-
-  def xsrf_ok(self, token):
-    return token is not None and token in self._xsrf_tokens
-
   @classmethod
   def email_key(cls, email):
     return ndb.Key('Account', '<%s>' % email)
 
   @classmethod
   def current_user_key(cls):
-    user = _get_current_user()
+    user = get_current_user()
     if user is not None:
       return cls.email_key(user.email())
 
@@ -235,7 +203,7 @@ class Account(AuthedModel):
   def current_async(cls):
     ctx = ndb.get_context()
     if not hasattr(ctx, 'codereview_account'):
-      user = _get_current_user()
+      user = get_current_user()
 
       account = None
       if user is not None:
@@ -269,10 +237,12 @@ class Account(AuthedModel):
       account = ctx.codereview_account
     raise ndb.Return(account)
 
-  def _pre_put_hook(self):
-    if (self.xsrf_secret is not None and
-        len(self.xsrf_secret) < self.TARGET_XSRF_SECRET_SIZE):
-      self.xsrf_secret = os.urandom(self.TARGET_XSRF_SECRET_SIZE)
+  def to_dict(self, *args, **kwargs):
+    kwargs.setdefault('exclude', set()).add('blocked')
+    ret = super(Account, self).to_dict(*args, **kwargs)
+    if self.user == get_current_user():
+      ret['xsrf'] = xsrf.make_header_token(self.user)
+    return ret
 
 
 def current_account_async():

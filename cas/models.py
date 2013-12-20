@@ -4,12 +4,11 @@ import itertools
 import logging
 
 from google.appengine.ext import ndb
-from google.appengine.ext.ndb import polymodel
 
 from . import common
 from . import types
 
-from ..framework import utils, exceptions
+from framework import utils, exceptions
 
 class CASUnknownDataType(common.CASError):
   def __init__(self, type_map, data_type):
@@ -103,7 +102,11 @@ class CAS_IDProperty(ndb.KeyProperty):
     return CAS_ID.fromkey(value)
 
 
-class CASData(polymodel.PolyModel):
+class CASData(ndb.Model):
+  # NOTE: This could have been a PolyModel, but that doesn't allow
+  # per-model control over cache/memcache behavior. In particular, we don't
+  # want CASDataInline objects showing up in cache or memcache.
+
   # pylint: disable=R0922
   timestamp = ndb.DateTimeProperty(auto_now_add=True)
 
@@ -111,8 +114,20 @@ class CASData(polymodel.PolyModel):
   def data_async(self):
     raise NotImplementedError()
 
+  @classmethod
+  def keys(cls, parent):
+    parent = parent.pairs()
+    ret = []
+    for klazz in cls.__subclasses__():
+      # pylint: disable=W0212
+      ret.append(ndb.Key(pairs=parent + [(klazz._get_kind(), 1)]))
+    return ret
+
 
 class CASDataInline(CASData):
+  _use_cache = False  # will blow out frontend memory
+  _use_memcache = False  # will evict other, more-useful stuff
+
   data = ndb.BlobProperty(compressed=True)
 
   @utils.cached_property
@@ -206,8 +221,17 @@ class CASEntry(ndb.Model):
       * CASDataInline
     """
     key = key or self.key
-    data_key = ndb.Key(pairs=key.pairs() + ('CASData', 1))
-    data_obj = yield data_key.get_async()
+    # TODO(iannucci): When we implement other data methods, perhaps we should
+    # just do a Future.wait_any and pick up the first non-None entry?
+    # Alternately, we could store the actual key for the CASData subclass, but
+    # then we wouldn't be able to know where the data is stored without looking
+    # up the CASEntry first (right now we can run this method without loading
+    # the CASEntry first).
+    data_objs = filter(bool, (yield ndb.get_multi_async(CASData.keys(key))))
+    if len(data_objs) > 1:
+      data_obj = sorted(data_objs, key=lambda x: x.timestamp)
+    else:
+      data_obj = data_objs[0]
     raise ndb.Return((yield data_obj.data_async))
 
   @utils.hybridmethod

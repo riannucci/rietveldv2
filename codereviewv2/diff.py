@@ -5,7 +5,7 @@ import hashlib
 
 from google.appengine.ext import ndb
 
-from ..framework import utils
+from framework import utils
 
 
 class LazyLineSplitter(collections.Sequence):
@@ -103,6 +103,31 @@ class DiffablePair(object):
       'action': self.action,
     }
 
+  def _diff_body(self, n, nl, seq_matcher=None):
+    if seq_matcher is None:
+      seq_matcher = difflib.SequenceMatcher(None, self.old.lines,
+                                            self.new.lines)
+    old, new = self.old, self.new
+    started = False
+    for group in seq_matcher.get_grouped_opcodes(n):
+      if not started:
+        yield '--- a/%s %s%s' % (old.path, old.timestamp, nl)
+        yield '+++ b/%s %s%s' % (new.path, new.timestamp, nl)
+        started = True
+      i1, i2, j1, j2 = group[0][1], group[-1][2], group[0][3], group[-1][4]
+      yield "@@ -%d,%d +%d,%d @@%s" % (i1+1, i2-i1, j1+1, j2-j1, nl)
+      for tag, i1, i2, j1, j2 in group:
+        if tag == 'equal':
+          for line in old.data[i1:i2]:
+            yield ' ' + line
+          continue
+        if tag == 'replace' or tag == 'delete':
+          for line in old.data[i1:i2]:
+            yield '-' + line
+        if tag == 'replace' or tag == 'insert':
+          for line in new.data[j1:j2]:
+            yield '+' + line
+
   def generate_diff(self, mode, **kwargs):
     differ = {
       'git': self.generate_git_diff,
@@ -122,38 +147,21 @@ class DiffablePair(object):
     yield 'Index: %s%s' % (path, nl)
     yield '%s%s' % ('=' * 67, nl)
 
-    started = False
-    seq_matcher = difflib.SequenceMatcher(None, self.old.lines, self.new.lines)
-    for group in seq_matcher.get_grouped_opcodes(n):
-      if not started:
-        yield '--- a/%s %s%s' % (path, old.timestamp, nl)
-        yield '+++ b/%s %s%s' % (path, new.timestamp, nl)
-        started = True
-      i1, i2, j1, j2 = group[0][1], group[-1][2], group[0][3], group[-1][4]
-      yield "@@ -%d,%d +%d,%d @@%s" % (i1+1, i2-i1, j1+1, j2-j1, nl)
-      for tag, i1, i2, j1, j2 in group:
-        if tag == 'equal':
-          for line in old.data[i1:i2]:
-            yield ' ' + line
-          continue
-        if tag == 'replace' or tag == 'delete':
-          for line in old.data[i1:i2]:
-            yield '-' + line
-        if tag == 'replace' or tag == 'insert':
-          for line in new.data[j1:j2]:
-            yield '+' + line
+    for line in self._diff_body(n, nl):
+      yield line
 
     if old.mode != new.mode:
       yield 'Property changes on: %s%s' % (path, nl)
       yield '%s%s' % ('_' * 67, nl)
-      if new.mode & 0100:
+      if new.mode & 0100:  # exe bit is set
         yield 'Added: svn:executable%s' % nl
-        yield '   + *'
+        yield '## -0,0 +1 ##%s' % nl
+        yield '+*%s' % nl
       else:
-        # TODO(iannucci): Make this work
-        yield 'Added: svn:executable%s' % nl
-        yield '   + *'
-
+        yield 'Deleted: svn:executable%s' % nl
+        yield '## -1 +0,0 ##%s' % nl
+        yield '-*%s' % nl
+      yield r'\ No newline at end of property%s' % nl
 
   def generate_git_diff(self, n=3, nl='\n'):
     # TODO(iannucci): Produce hunk summaries, i.e.
@@ -194,24 +202,7 @@ class DiffablePair(object):
       else:
         return
 
-    started = False
-    for group in seq_matcher.get_grouped_opcodes(n):
-      if not started:
-        yield '--- a/%s %s%s' % (old.path, old.timestamp, nl)
-        yield '+++ b/%s %s%s' % (new.path, new.timestamp, nl)
-        started = True
-      i1, i2, j1, j2 = group[0][1], group[-1][2], group[0][3], group[-1][4]
-      yield "@@ -%d,%d +%d,%d @@%s" % (i1+1, i2-i1, j1+1, j2-j1, nl)
-      for tag, i1, i2, j1, j2 in group:
-        if tag == 'equal':
-          for line in old.data[i1:i2]:
-            yield ' ' + line
-          continue
-        if tag == 'replace' or tag == 'delete':
-          for line in old.data[i1:i2]:
-            yield '-' + line
-        if tag == 'replace' or tag == 'insert':
-          for line in new.data[j1:j2]:
-            yield '+' + line
+    for line in self._diff_body(n, nl, seq_matcher):
+      yield line
 
     # TODO(iannucci): Worry about missing newline at end of files?
