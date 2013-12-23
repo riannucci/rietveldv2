@@ -13,7 +13,7 @@ class Accounts(rest_handler.RESTCollectionHandler):
   SPECIAL_ROUTES = {'me': 'me'}
 
   @ndb.tasklet
-  def read_one_async(self, key):
+  def get_one_async(self, key):
     # Require the user to at least be logged in.
     me, account = yield [
       auth_models.current_account_async(),
@@ -34,6 +34,6 @@ class Accounts(rest_handler.RESTCollectionHandler):
       raise ndb.Return(account.to_dict(include=['user', 'nickname']))
 
   @rest_handler.skip_xsrf
-  def read_me_async(self, _key):
+  def get_me_async(self, _key):
     me = yield auth_models.current_account_async()
     raise ndb.Return(me.to_dict())

@@ -8,7 +8,8 @@ from django.core.urlresolvers import resolve
 
 class RequestHandler(object):
   """Kinda-sorta like webapp2.RequestHandler."""
-  _KNOWN_METHODS = frozenset(('get', 'head', 'post', 'put', 'delete'))
+  _KNOWN_METHODS = frozenset(('get', 'head', 'post', 'put', 'delete',
+                              'options'))
 
   def __init__(self, middleware=(), **methods):
     assert set(methods.iterkeys()).issubset(self._KNOWN_METHODS)
@@ -27,7 +28,12 @@ class RequestHandler(object):
       return False
     return isinstance(data[-1], types.TracebackType)
 
-  def _process_request(self, handler_fn, request, *args, **kwargs):
+  @ndb.toplevel
+  def __call__(self, request, *args, **kwargs):
+    handler_fn = getattr(self, request.method.lower(), None)
+    if handler_fn is None:
+      return HttpResponseNotAllowed(self.OK_METHODS)
+
     request.route_name = lambda: resolve(request.path).url_name
 
     mware = self.MIDDLEWARE
@@ -45,12 +51,3 @@ class RequestHandler(object):
     if isinstance(rslt, tuple):
       raise rslt[0], rslt[1], rslt[2]
     return rslt
-
-  @ndb.toplevel
-  def __call__(self, request, *args, **kwargs):
-    handler_fn = getattr(self, request.method.lower(), None)
-    if handler_fn is None:
-      return HttpResponseNotAllowed(self.OK_METHODS)
-
-    return self._process_request(
-      handler_fn, self.MIDDLEWARE, request, *args, **kwargs)

@@ -11,22 +11,15 @@ from .common import API_PREFIX
 STATUS_CODE = middleware.STATUS_CODE
 
 
-# COLLECTION = cls.__name__.lower()
-# MODEL_NAME = MODEL_NAME or '$%s' cls.__name__
-
-# special_one(pattern) -> /collection/<id>/<pattern>
-# special_all(pattern) -> /collection/<pattern>
-#  extra *args go between key and **kwargs
-
 class Issues(rest_handler.RESTCollectionHandler,
              rest_handler.QueryableCollectionMixin):
   PREFIX = API_PREFIX
   MODEL_NAME = 'Issue'
 
-  # get_all_async implemented by QueryableCollectionMixin
+  # get_async implemented by QueryableCollectionMixin
 
   @ndb.transactional_tasklet
-  def post_all_async(self, _key, send_message=False, patchset=None, **data):
+  def post_async(self, _key, send_message=False, patchset=None, **data):
     patchset_cas = issue_models.get_cas_future(patchset)
 
     issue = yield issue_models.Issue.create_async(**data)
@@ -59,6 +52,7 @@ class Issues(rest_handler.RESTCollectionHandler,
     ent = yield key.get_async()
     raise ndb.Return(ent.to_dict())
 
+  # TODO(iannucci): Make this operation idempotent
   @ndb.transactional_tasklet
   def put_one_async(self, key, **data):
     issue = yield key.get_async()
@@ -78,7 +72,7 @@ class Drafts(rest_handler.RESTCollectionHandler):
   PARENT = Issues
 
   @ndb.tasklet
-  def get_all_async(self, key):
+  def get_async(self, key):
     metadata_key = issue_models.Issue.metadata_key(key.parent())
     metadata = yield metadata_key.get_async()
     raise ndb.Return([d.to_dict() for d in metadata.drafts])
@@ -101,7 +95,7 @@ class Patchsets(rest_handler.RESTCollectionHandler,
   BUFFER_LIMIT = 10 * 1024 * 1024  # only buffer up to 10MB of data at a time
 
   @ndb.transactional_tasklet
-  def post_all_async(self, key, patchset=None, message=None):
+  def post_async(self, key, patchset=None, message=None):
     patchset_cas = issue_models.get_cas_future(patchset)
     issue = yield key.parent().get_async()
     ps = yield issue.add_patchset_async(patchset_cas, message=message)
@@ -136,7 +130,7 @@ class Patchsets(rest_handler.RESTCollectionHandler,
         yield line
 
   @ndb.tasklet
-  def get_diff_async(self, key, mode='git'):
+  def get_one_diff_async(self, key, mode='git'):
     patchset = yield key.get_async()
     patches = collections.deque((yield patchset.patches_async))
 
@@ -154,7 +148,7 @@ class Comments(rest_handler.RESTCollectionHandler):
   PARENT = Patchsets
 
   @ndb.tasklet
-  def get_all_async(self, key):
+  def get_async(self, key):
     ps = yield key.parent().get_async()
     ret = [c.to_dict() for c in ps.comments]
     raise ndb.Return(ret)
@@ -174,7 +168,7 @@ class Patches(rest_handler.RESTCollectionHandler):
   }
 
   @ndb.tasklet
-  def get_all_async(self, key):
+  def get_async(self, key):
     ps = yield key.parent().get_async()
     raise ndb.Return([p.to_dict() for p in (yield ps.patches_async)])
 
@@ -185,7 +179,7 @@ class Patches(rest_handler.RESTCollectionHandler):
     raise ndb.Return(patches[key.id()].to_dict())
 
   @ndb.tasklet
-  def get_diff_async(self, key, mode='git'):
+  def get_one_diff_async(self, key, mode='git'):
     patchset = yield key.parent()
     patches = yield patchset.patches_async
     patch = patches[key.id()]
@@ -195,7 +189,7 @@ class Patches(rest_handler.RESTCollectionHandler):
                                   content_type='text/plain'))
 
   @ndb.tasklet
-  def get_diff2_async(self, key, right_ps_id, right_p_id, mode='git'):
+  def get_one_diff2_async(self, key, right_ps_id, right_p_id, mode='git'):
     issue_key = key.parent().parent()
     right_key = ndb.Key(pairs=issue_key.pairs() + [('Patchset', right_ps_id)])
 
@@ -221,7 +215,7 @@ class PatchComments(rest_handler.RESTCollectionHandler):
   COLLECTION_NAME = 'comments'
 
   @ndb.tasklet
-  def get_all_async(self, key):
+  def get_async(self, key):
     patch_key = key.parent()
     ps = yield patch_key.parent().get_async()
     patches = yield ps.patches_async
@@ -230,7 +224,7 @@ class PatchComments(rest_handler.RESTCollectionHandler):
 
   @ndb.tasklet
   def get_one_async(self, key, **data):
-    comments = yield self.get_all_async(key, **data)
+    comments = yield self.get_async(key, **data)
     ret = next((x for x in comments if x['id'] == key.id()), None)
     if not ret or ret['patch'] != key.parent().id():
       raise exceptions.NotFound('Comment')
@@ -242,7 +236,7 @@ class PatchDrafts(rest_handler.RESTCollectionHandler):
   COLLECTION_NAME = 'drafts'
 
   @ndb.tasklet
-  def get_all_async(self, key):
+  def get_async(self, key):
     patch_key = key.parent()
     patchset_key = patch_key.parent()
     metadata_key = issue_models.Issue.metadata_key(patchset_key.parent())
@@ -256,13 +250,13 @@ class PatchDrafts(rest_handler.RESTCollectionHandler):
 
   @ndb.tasklet
   def get_one_async(self, key, **data):
-    drafts = yield self.get_all_async(key, **data)
+    drafts = yield self.get_async(key, **data)
     ret = next((x for x in drafts if x['id'] == key.id()), None)
     if not ret:
       raise exceptions.NotFound('Draft')
     raise ndb.Return({'data': ret})
 
-  def post_all_async(self, key, draft):
+  def post_async(self, key, draft):
     issue_key = key.parent().parent()
     mdata_key = issue_models.Issue.metadata_key(issue_key).get_async()
     return issue_models.IssueMetadata.update_async(mdata_key, [draft])
@@ -272,7 +266,7 @@ class Messages(rest_handler.RESTCollectionHandler):
   PARENT = Issues
 
   @ndb.transactional_tasklet(xg=True)  # pylint: disable=E1120
-  def post_all_async(self, key, message='', subject='', send_message=True):
+  def post_async(self, key, message='', subject='', send_message=True):
     issue_key = key.parent()
     issue, metadata = yield [
       issue_key.get_async(),
@@ -289,7 +283,7 @@ class Messages(rest_handler.RESTCollectionHandler):
     yield issue.flush_to_ds_async(), metadata.put_async()
     raise ndb.Return({STATUS_CODE: 201, 'id': msg.key.id()})
 
-  def get_all_async(self, key):
+  def get_async(self, key):
     issue = yield key.parent().get_async()
     raise ndb.Return([m.to_dict() for m in (yield issue.messages_async)])
 

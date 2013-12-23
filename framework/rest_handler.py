@@ -1,22 +1,22 @@
-import functools
 import collections
+import functools
+import json
+import logging
 import re
+import types
 
 from google.appengine.ext import ndb
 
 from django.conf.urls.defaults import url
 
-from . import xsrf
-from . import handler
-from . import middleware
-from . import query_parser
+from . import xsrf, handler, middleware, query_parser, exceptions
 
 
 class QueryableCollectionMixin(object):
   DEFAULT_PAGE_LIMIT = 20
   PAGE_LIMIT_MAX = 100
 
-  def get_all_async(self, key, query_string=None, cursor=None, limit=None,
+  def get_async(self, key, query_string=None, cursor=None, limit=None,
                     **data):
     model = ndb.Model._kind_map[self.MODEL_NAME]  # pylint: disable=W0212
     assert not data
@@ -66,12 +66,30 @@ class KeyMiddleware(middleware.Middleware):
       else:
         id = conversion_fn(args.pop(0))
       pairs.append((kind, id))
-    return ([ndb.Key(pairs=pairs)] + args), kwargs
+    return ([ndb.Key(pairs=pairs) if pairs else None] + args), kwargs
 
 
 def skip_xsrf(func):
   func.check_xsrf = False
   return func
+
+
+def check_xsrf(func):
+  func.check_xsrf = True
+  return func
+
+
+def default_process_request(request):
+  # TODO(iannucci):  Check mimetype?
+  ret = None
+  try:
+    ret = json.load(request)
+  except:
+    logging.exception('Bad JSON request body')
+
+  if not ret or not isinstance(ret, dict):
+    raise exceptions.BadData('Expected JSON object in request body.')
+  return ret
 
 
 class RESTCollectionHandler(object):
@@ -83,10 +101,13 @@ class RESTCollectionHandler(object):
   PREFIX = ''
   SPECIAL_ROUTES = {}
   MIDDLEWARE = ()
+  PROCESS_REQUEST = default_process_request
 
-  # e.g. create_all_async, read_cool_hat_async
-  _BASE_REGEX = (r'^(?P<action>post|get|put|delete|head)_'
-                 r'(?P<category>%s)_async$')
+  # e.g. post_async, get_cool_hat_async
+  # We reserve OPTIONS to implement automatic explorable API endpoint.
+  # Install browsable single-doc javascript endpoint at the base of the api.
+  _BASE_REGEX = (r'^(?P<method>post|get|put|delete|head)'
+                 r'(?:_(?P<single>one))?(?:_(?P<route>%s))?_async$')
 
   @classmethod
   def collection_name(cls):
@@ -100,6 +121,7 @@ class RESTCollectionHandler(object):
 
   @classmethod
   def id_type_token(cls):
+    assert isinstance(cls.ID_TYPE_TOKEN, (types.NoneType, basestring))
     return '(%s)' % (cls.ID_TYPE_TOKEN or {
       int: r'\d+',
       str: r'[^/]+',
@@ -112,58 +134,67 @@ class RESTCollectionHandler(object):
     return ret
 
   @classmethod
-  def url_patten(cls, category):
+  def url_patten(cls, single, route=None):
     if cls.PARENT is None:
       ret = '^' + cls.PREFIX
     else:
       ret = cls.PARENT.url_patten('one')
     ret += '/' + cls.collection_name()
-    if category == 'one':
+    if single:
       ret += '/' + cls.id_type_token()
-    elif category in cls.SPECIAL_ROUTES:
-      ret += '/' + cls.SPECIAL_ROUTES[category]
+    if route:
+      ret += '/' + cls.SPECIAL_ROUTES[route]
     return ret
 
   @classmethod
   def generate_urlpatterns(cls, *args, **kwargs):
-    inst = cls(*args, **kwargs)
-    handlers = collections.defaultdict(dict)
+    handlers = collections.defaultdict(
+      lambda: collections.defaultdict(dict))
 
-    categories = inst.SPECIAL_ROUTES.keys() + ['all', 'one']
+    regex = re.compile(cls._BASE_REGEX % '|'.join(cls.SPECIAL_ROUTES))
 
-    regex = re.compile(cls._BASE_REGEX %
-                       '|'.join('(?:%s)' % c for c in categories))
-
-    for name, method in inst.__dict__.iteritems():
+    for name, func in cls.__dict__.iteritems():
       m = regex.match(name)
       if m:
-        groups = m.groupdict()
-        handlers[groups['category']][groups['action']] = method
+        g = m.groupdict()
+        handlers[bool(g['single'])][g['route']][g['method']] = func
 
+    inst = cls(*args, **kwargs)
     key_pairs = cls.key_pairs()
     ret = []
-    base_mware = [middleware.MethodOverride(),
-                  middleware.JSONMiddleware()]
-    for category in categories:
-      mware = base_mware + [KeyMiddleware(key_pairs, (category == 'all'))]
-      mware += inst.MIDDLEWARE
+    for single in (False, True):
+      for route in [None] + cls.SPECIAL_ROUTES.keys():
+        method_funcs = handlers[single][route]
+        if not method_funcs:
+          continue
 
-      url_regex = cls.url_patten(category) + '$'
-      name = 'api_%s_%s' % (cls.collection_name(), category)
-      methods = {}
-      for action_name, func in handlers[category].iteritems():
-        @functools.wraps(func)
-        @staticmethod
-        @ndb.toplevel
-        def handler_method(request, *args, **kwargs):
-          assert not kwargs  # would be from django's url router, but we're
-                          # usurping kwargs for json data
-          if getattr(func, 'check_xsrf', True):
-            xsrf.assert_xsrf()
-          return func(inst, *args, **request.json).get_result()
-        methods[action_name] = handler_method
-      ret.append(url(
-        url_regex, handler.RequestHandler(mware, **methods), name=name))
+        mware = ((middleware.MethodOverride(),
+                  KeyMiddleware(key_pairs, single)) +
+                cls.MIDDLEWARE +
+                (middleware.JSONResponseMiddleware(),))
+
+        url_regex = cls.url_patten(single, route) + '$'
+        name = 'api_%s%s%s' % (cls.collection_name(),
+                               '_one' if single else '',
+                               '_' + route if route else '')
+        methods = {}
+        for method_name, func in method_funcs.iteritems():
+          @functools.wraps(func)
+          @ndb.toplevel
+          def handler_method(request, *args, **kwargs):
+            assert not kwargs  # would be from django's url router, but we're
+                            # usurping kwargs for processed request data
+            if getattr(func, 'check_xsrf', (method_name != 'get')):
+              xsrf.assert_xsrf()
+
+            data = cls.PROCESS_REQUEST(request)
+            if isinstance(data, dict):
+              return func(inst, *args, **data).get_result()
+            else:
+              return func(inst, *(args + (data,))).get_result()
+          methods[method_name] = handler_method
+        ret.append(url(
+          url_regex, handler.RequestHandler(mware, **methods), name=name))
 
     return ret
 

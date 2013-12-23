@@ -3,11 +3,7 @@ import logging
 
 from google.appengine.ext import ndb
 
-from . import common
-
-
-class CASValidationError(common.CASError):
-  pass
+from . import exceptions
 
 
 class CASTypeRegistry(dict):
@@ -70,7 +66,7 @@ class CASTypeRegistry(dict):
           # Log exception for debugging, but neuter the raised exception to
           # avoid leakage of implementation details.
           logging.exception("While validating '%s'" % type_names[0])
-          raise CASValidationError("Invalid '%s'" % type_names[0])
+          raise exceptions.CASValidationError("Invalid '%s'" % type_names[0])
 
       for name in type_names:
         self[name] = wrapped

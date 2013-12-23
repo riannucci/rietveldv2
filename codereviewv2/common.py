@@ -4,4 +4,4 @@ from . import auth_models
 
 xsrf.GET_CURRENT_USER = auth_models.get_current_user
 
-API_PREFIX = 'api/v2'
+API_PREFIX = 'codereview/api/v2'

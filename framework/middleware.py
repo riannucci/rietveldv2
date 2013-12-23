@@ -104,16 +104,7 @@ class Jinja(Middleware):
     return response
 
 
-class JSONMiddleware(Middleware):
-  TEMPLATE = object()
-
-  def pre(self, request, *args, **kwargs):
-    # TODO(iannucci): Should this check content-type?
-    if not hasattr(request, 'json'):
-      # Use file-like-interface of HttpRequest
-      request.json = json.load(request)
-    return args, kwargs
-
+class JSONResponseMiddleware(Middleware):
   def post(self, request, result):
     result = result or {}
     if isinstance(result, HttpResponse):
@@ -134,11 +125,12 @@ class JSONMiddleware(Middleware):
         status = 'ERROR'
       elif 500 <= code:
         status = 'SERVER_ERROR'
+      else:
+        logging.warn('JSON response code unknown? %s', result)
       result['status'] = status
     result = json.dumps(result, separators=(',',':'), sort_keys=True)
     return HttpResponse(result, content_type='application/json; charset=utf-8',
                         status=code)
-
 
   def error(self, request, ex_info):
     if isinstance(ex_info[1], exceptions.SpecialActionException):
@@ -150,12 +142,10 @@ class JSONMiddleware(Middleware):
 
 
 class MethodOverride(Middleware):
-  OK_METHODS = set(('GET', 'POST', 'PUT', 'DELETE', 'HEAD'))
+  OK_METHODS = set(('GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS'))
 
   def pre(self, request, *args, **kwargs):
-    method = request.GET.get('_method', None)
-    if method is None:
-      method = request.META.get('HTTP_X_HTTP_METHOD_OVERRIDE', None)
-    request.method = method or request.method
+    request.method = request.META.get('HTTP_X_HTTP_METHOD_OVERRIDE',
+                                      request.method)
     assert request.method in self.OK_METHODS
     return args, kwargs

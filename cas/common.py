@@ -1,5 +1,3 @@
-class CASError(Exception):
-  pass
-
+API_PREFIX = 'cas/api/v1'
 
 
