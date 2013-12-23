@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from main import run_all_tests
-
 import Queue
 import coverage
 import glob
