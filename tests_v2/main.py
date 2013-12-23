@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import Queue
 import coverage
 import glob
