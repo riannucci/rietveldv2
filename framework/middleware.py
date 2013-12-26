@@ -16,6 +16,7 @@ import json
 import logging
 
 from google.appengine.ext import ndb
+from google.appengine.api import users
 
 from django.http import HttpResponse
 
@@ -119,21 +120,25 @@ class Jinja(Middleware):
 
 
 class JSONResponseMiddleware(Middleware):
+  @staticmethod
+  def _json_default(obj):
+    # TODO(iannucci): Make this know about various types
+    return str(obj)
+
   def post(self, request, result):
     result = result or {}
     if isinstance(result, HttpResponse):
       return result
     assert isinstance(result, dict)
+    headers = result.pop(HEADERS, {})
     code = result.pop(STATUS_CODE, 200)
     if 'status' not in result:
       status = 'UNKNOWN'
       if 100 <= code < 200:
-        logging.warn('JSON response code informational? %s', result)
         status = 'INFO'
       elif 200 <= code < 300:
         status = 'OK'
       elif 300 <= code < 400:
-        logging.warn('JSON response code redirect? %s', result)
         status = 'REDIRECT'
       elif 400 <= code < 500:
         status = 'ERROR'
@@ -141,18 +146,33 @@ class JSONResponseMiddleware(Middleware):
         status = 'SERVER_ERROR'
       else:
         logging.warn('JSON response code unknown? %s', result)
-      result['status'] = status
-    result = json.dumps(result, separators=(',',':'), sort_keys=True)
-    return HttpResponse(result, content_type='application/json; charset=utf-8',
-                        status=code)
+      result['status'] = {'type': status, 'code': code}
+    result = json.dumps(result, separators=(',',':'), sort_keys=True,
+                        default=self._json_default)
+    ret = HttpResponse(result, content_type='application/json; charset=utf-8',
+                       status=code)
+    # HttpResponse apparently doesn't have .update()
+    for k, v in headers.iteritems():
+      ret[k] = v
+    return ret
 
   def error(self, request, ex_info):
-    if isinstance(ex_info[1], exceptions.SpecialActionException):
-      return ex_info
-    logging.error("Caught in json_status_response")
-    status = getattr(ex_info[1], 'STATUS_CODE', 500)
-    return self.post(request, {
-      'msg': str(ex_info[1]), STATUS_CODE: status})
+    if isinstance(ex_info[1], exceptions.NeedsLogin):
+      url = users.create_login_url(
+          request.get_full_path().encode('utf-8'))
+      return self.post(request, {
+        STATUS_CODE: 302,
+        HEADERS: {'Location': url},
+        'location': url,
+        'msg': str(ex_info[1]),
+      })
+    else:
+      logging.error('Handling JSON error.', exc_info=ex_info)
+      status = getattr(ex_info[1], 'STATUS_CODE', 500)
+      return self.post(request, {
+        STATUS_CODE: status,
+        'msg': str(ex_info[1])
+      })
 
 
 class MethodOverride(Middleware):

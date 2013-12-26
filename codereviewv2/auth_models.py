@@ -12,159 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-
-from google.appengine.api import oauth
-from google.appengine.api import users
 from google.appengine.ext import ndb
 
 from django.conf import settings
 
-from framework import xsrf
-from framework.authed_model import AuthedModel
-
-EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email'
+from framework import xsrf, account
 
 
-def _get_current_rietveld_oauth_user():
-  """Gets the current OAuth 2.0 user associated with a request.
-
-  This user must be intending to reach this application, so we check the token
-  info to verify this is the case.
-
-  Returns:
-    A users.User object that was retrieved from the App Engine OAuth library if
-        the token is valid, otherwise None.
-  """
-  # TODO(dhermes): Address local environ here as well.
-  try:
-    current_client_id = oauth.get_client_id(EMAIL_SCOPE)
-  except oauth.Error:
-    return
-
-  accepted_client_id, _, additional_client_ids = _SecretKey.get_config()
-  if (accepted_client_id != current_client_id and
-      current_client_id not in additional_client_ids):
-    logging.debug('Client ID %r not intended for this application.',
-                  current_client_id)
-    return
-
-  try:
-    return oauth.get_current_user(EMAIL_SCOPE)
-  except oauth.Error:
-    logging.warning('A Client ID was retrieved with no corresponsing user.')
-
-
-def get_current_user():
-  """Gets the current user associated with a request.
-
-  First tries to verify a user with the Users API (cookie-based auth), and then
-  falls back to checking for an OAuth 2.0 user with a token minted for use with
-  this application.
-
-  Returns:
-    A users.User object that was retrieved from the App Engine Users or OAuth
-        library if such a user can be determined, otherwise None.
-  """
-  return users.get_current_user() or _get_current_rietveld_oauth_user()
-
-
-class _SecretKey(ndb.Model):
-  """Model for representing project secret keys."""
-  client_id = ndb.StringProperty(required=True, indexed=False)
-  client_secret = ndb.StringProperty(required=True, indexed=False)
-  additional_client_ids = ndb.StringProperty(repeated=True, indexed=False)
-
-  GLOBAL_KEY = '_global_config'
-
-  @classmethod
-  def _get_kind(cls):
-    return 'SecretKey'
-
-  @classmethod
-  def set_config(cls, client_id, client_secret, additional_client_ids=None):
-    """Sets global config object using a Client ID and Secret.
-
-    Args:
-      client_id: String containing Google APIs Client ID.
-      client_secret: String containing Google APIs Client Secret.
-      additional_client_ids: List of strings for Google APIs Client IDs which
-        are allowed against this application but not used to mint tokens on
-        the server. For example, service accounts which interact with this
-        application. Defaults to None.
-
-    Returns:
-      The inserted SecretKey object.
-    """
-    additional_client_ids = additional_client_ids or []
-    config = cls(id=cls.GLOBAL_KEY,
-                 client_id=client_id, client_secret=client_secret,
-                 additional_client_ids=additional_client_ids)
-    config.put()
-    return config
-
-  @classmethod
-  def get_config(cls):
-    """Gets tuple of Client ID and Secret from global config object.
-
-    Returns:
-      3-tuple containing the Client ID and Secret from the global config
-          SecretKey object as well as a list of other allowed client IDs, if the
-          config is in the datastore, else the tuple (None, None, []).
-    """
-    config = cls.get_by_id(cls.GLOBAL_KEY)
-    if config is None:
-      return None, None, []
-    else:
-      return (config.client_id, config.client_secret,
-              config.additional_client_ids)
-
-
-class UserProperty(ndb.UserProperty):
-  """An extension of the ndb.UserProperty which also accepts OAuth users.
-
-  The default ndb.UserProperty only considers cookie-based Auth users.
-
-  Using:
-
-    class FooNDB(ndb.Model):
-      bar = UserProperty(auto_current_user=True)
-
-  with f = FooNDB() will have f.bar equal to None until the entity has been
-  stored.
-
-  To make the behavior here take effect immediately, something similar to
-
-  ('https://github.com/GoogleCloudPlatform/endpoints-proto-datastore/blob'
-   '/511c8ca87d7548b90e9966495e9ebffd5eecab6e/endpoints_proto_datastore/'
-   'ndb/properties.py#L215')
-
-  could be implementated.
-  """
-
-  def _prepare_for_put(self, entity):
-    """Custom hook to prepare the entity for a datastore put.
-
-    If auto_current_user or auto_current_user_add is used, will
-    set the current user using the get_current_user() method from this module.
-
-    Args:
-      entity: A Protobuf entity to store data.
-    """
-    if (self._auto_current_user or
-        (self._auto_current_user_add and not self._has_value(entity))):
-      value = get_current_user()
-      if value is not None:
-        self._store_value(entity, value)
-
+class AccountProperty(account.UserProperty):
+  ### Used to enable framework/prop_from_str monkeypatch
   def _user_value_from_str_async(self, val):
     return Account.get_by_email_async(val)
 
 
-class Account(AuthedModel):
+class Account(ndb.Model):
+  # TODO(iannucci): Move most of the account stuff to framework
   CONTEXT_CHOICES = (3, 10, 25, 50, 75, 100)
 
-  user = UserProperty(auto_current_user_add=True, required=True)
+  user = AccountProperty(auto_current_user_add=True, required=True)
 
   ### Preferences
   nickname = ndb.StringProperty()
@@ -189,7 +54,7 @@ class Account(AuthedModel):
   def _get_email(self):
     return self.key.id().strip('<>')
   email = ndb.ComputedProperty(_get_email)
-  lower_email = ndb.ComputedProperty(lambda self: self._get_email.lower())  # pylint: disable=W0212
+  lower_email = ndb.ComputedProperty(lambda self: self._get_email().lower())  # pylint: disable=W0212
   lower_nickname = ndb.ComputedProperty(lambda self: self.nickname.lower())
 
   created = ndb.DateTimeProperty(auto_now_add=True)
@@ -201,7 +66,7 @@ class Account(AuthedModel):
 
   @classmethod
   def current_user_key(cls):
-    user = get_current_user()
+    user = account.get_current_user()
     if user is not None:
       return cls.email_key(user.email())
 
@@ -216,15 +81,15 @@ class Account(AuthedModel):
   @ndb.tasklet
   def current_async(cls):
     ctx = ndb.get_context()
-    if not hasattr(ctx, 'codereview_account'):
-      user = get_current_user()
+    if not hasattr(ctx, 'account'):
+      user = account.get_current_user()
 
-      account = None
+      acnt = None
       if user is not None:
         email = user.email()
         key = cls.email_key(email)
-        account = yield key.get_async()
-        if account is None:
+        acnt = yield key.get_async()
+        if acnt is None:
           # NOTE: Technically this is racy, since a user could theoretically be
           # in this code from multiple sessions. But the way to fix it would be
           # to use get_or_insert, which uses a transaction. Since we need that
@@ -240,22 +105,22 @@ class Account(AuthedModel):
           # it into a long by hashing it.
           uniquifier = hash(user.user_id()) % 1337
 
-          account = cls(
+          acnt = cls(
             key=key,
             user=user,
             nickname='%s (%s)' % (email[email.index('@')+1:], uniquifier),
           )
-          account.put_async()  # why wait?
-      ctx.codereview_account = account
+          acnt.put_async()  # why wait?
+      ctx.account = acnt
     else:
-      account = ctx.codereview_account
-    raise ndb.Return(account)
+      acnt = ctx.account
+    raise ndb.Return(acnt)
 
   def to_dict(self, *args, **kwargs):
     kwargs.setdefault('exclude', set()).add('blocked')
     ret = super(Account, self).to_dict(*args, **kwargs)
-    if self.user == get_current_user():
-      ret['xsrf'] = xsrf.make_header_token(self.user)
+    if self.user == account.get_current_user():
+      ret['xsrf'] = xsrf.make_header_token()
     return ret
 
 

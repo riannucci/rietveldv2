@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from framework import account
-
-from . import auth_models
-
-account.ACCOUNT_MODEL = auth_models.Account
-
-API_PREFIX = 'codereview/api/v2'
+def GenTests():
+  from tests_v2.support import httptest
+  import os
+  test_dir = os.path.dirname(os.path.abspath(__file__))
+  for test in httptest.LoadAll(test_dir, 'codereview/api/v2'):
+    yield test

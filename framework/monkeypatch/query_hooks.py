@@ -49,7 +49,7 @@ if not hasattr(ndb.Model, '_post_query_filter'):
   orig_process_results = ndb.query.datastore_query.Batch._process_results
   @functools.wraps(orig_process_results)
   def _process_results(self, results):
-    ret = orig_process_results(results)
+    ret = orig_process_results(self, results)
     new_ret = []
     if self._batch_shared.query_options.keys_only:
       for key in ret:

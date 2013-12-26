@@ -47,7 +47,7 @@ class Accounts(rest_handler.RESTCollectionHandler):
     else:
       raise ndb.Return(account.to_dict(include=['user', 'nickname']))
 
-  @rest_handler.skip_xsrf
+  @ndb.tasklet
   def get_me_async(self, _key):
     me = yield auth_models.current_account_async()
-    raise ndb.Return(me.to_dict())
+    raise ndb.Return({'data': me.to_dict()})

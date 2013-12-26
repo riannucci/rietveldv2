@@ -159,7 +159,7 @@ class Issue(mixins.HideableModelMixin):
   subject = ndb.StringProperty()
   description = ndb.TextProperty()
 
-  owner = auth_models.UserProperty(auto_current_user_add=True)
+  owner = auth_models.AccountProperty(auto_current_user_add=True)
 
   cc = LowerEmailProperty(repeated=True)
   reviewers = LowerEmailProperty(repeated=True)
@@ -406,7 +406,7 @@ class Comment(ndb.Model):
   side = ndb.IntegerProperty(indexed=False, choices=(0, 1))
   body = ndb.TextProperty()
 
-  owner = auth_models.UserProperty(auto_current_user_add=True, indexed=False)
+  owner = auth_models.AccountProperty(auto_current_user_add=True, indexed=False)
   created = ndb.DateTimeProperty(auto_now_add=True, indexed=False)
 
   def populate(self, **data):
@@ -424,7 +424,7 @@ class Patchset(mixins.HideableModelMixin):
   message = ndb.TextProperty(indexed=False)
   data_ref = cas.models.CAS_IDProperty(PATCHSET_TYPE)
 
-  created_by = auth_models.UserProperty(auto_current_user_add=True,
+  created_by = auth_models.AccountProperty(auto_current_user_add=True,
                                         indexed=False)
   created = ndb.DateTimeProperty(indexed=False, auto_now_add=True)
 
@@ -508,7 +508,8 @@ class Patchset(mixins.HideableModelMixin):
 
 class Message(authed_model.AuthedModel):
   subject = ndb.StringProperty(indexed=False)
-  sender = auth_models.UserProperty(auto_current_user_add=True, indexed=False)
+  sender = auth_models.AccountProperty(auto_current_user_add=True,
+                                       indexed=False)
   recipients = LowerEmailProperty(indexed=False, repeated=True)
   body = ndb.TextProperty()
 

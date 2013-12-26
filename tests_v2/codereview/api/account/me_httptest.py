@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-def url_test():
-  import urls
-  return {'urls': map(str, urls.urlpatterns)}
-
-def GenTests(test):
-  import os
-  expected = os.path.splitext(__file__)[0]
-  yield test(url_test, expected)
+def Execute(api):
+  api.GET('accounts/me')
+  api.login()
+  api.GET('accounts/me')

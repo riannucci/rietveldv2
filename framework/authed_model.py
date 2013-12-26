@@ -166,9 +166,10 @@ class AuthedModel(ndb.Model):
   @classmethod
   def _post_get_hook(cls, key, future):
     obj = future.get_result()  # could throw, but what else could we do?
-    obj._in_datastore = True  # pylint: disable=W0212
-    obj.assert_can('read')
-    super(AuthedModel, cls)._post_get_hook(key, future)
+    if obj is not None:
+      obj._in_datastore = True  # pylint: disable=W0212
+      obj.assert_can('read')
+      super(AuthedModel, cls)._post_get_hook(key, future)
 
   def _post_query_filter(self):
     self._in_datastore = True

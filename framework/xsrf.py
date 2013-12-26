@@ -23,10 +23,9 @@ import time
 from google.appengine.ext import ndb
 from google.appengine.api import users
 
-from . import exceptions
+from . import exceptions, account
 
 HEADER = 'X-Codereview-XSRF-Token'
-GET_CURRENT_USER = users.get_current_user
 
 class GlobalXSRFSecret(ndb.Model):
   data = ndb.BlobProperty()
@@ -60,12 +59,12 @@ def _constant_time_equals(a, b):
 
 
 def _generate_token(stamp):
-  user = GET_CURRENT_USER()
+  user = account.get_current_user()
   assert isinstance(user, users.User)
   assert isinstance(stamp, int) and stamp
   uid = user.user_id()
   assert uid is not None
-  h = hmac.new(_global_secret(), str(stamp), hashlib.sha256)
+  h = hmac.new(_global_secret().get_result(), str(stamp), hashlib.sha256)
   h.update(uid)
   return h.digest()
 

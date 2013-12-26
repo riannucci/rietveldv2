@@ -41,12 +41,10 @@ class BadData(FrameworkException):
   STATUS_CODE = 400
 
 
-class SpecialActionException(FrameworkException):
-  """Base class for all exceptions which have special handling in middleware."""
-
-
-class NeedsLogin(SpecialActionException):
+class NeedsLogin(FrameworkException):
   """Exception raised when there is a protected resource which needs a user
   account in order to display."""
+  STATUS_CODE = 302
 
-
+  def __init__(self):
+    super(NeedsLogin, self).__init__('Needs login.')

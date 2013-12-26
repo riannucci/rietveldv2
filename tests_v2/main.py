@@ -22,25 +22,22 @@ import shutil
 import sys
 import tempfile
 import traceback
-import difflib
-import yaml
-
-YAMLLoader = getattr(yaml, 'CLoader', yaml.Loader)
-YAMLDumper = getattr(yaml, 'CDumper', yaml.Dumper)
+import atexit
 
 SCRIPT = os.path.abspath(__file__)
 TEST_ROOT_PATH = os.path.dirname(SCRIPT)
 SRC_ROOT_PATH = os.path.dirname(os.path.dirname(SCRIPT))
-EXPECT_ROOT_PATH = os.path.join(SRC_ROOT_PATH, 'test_expectations')
 
-UNSET = object()
-
-
-def lazy_mkdir(d):
-  try:
-    os.makedirs(d)
-  except OSError:
-    pass
+TMP_SUFFIX = '.rietveld_tests'
+_TMP_DIR = None
+def get_tmp_dir():
+  global _TMP_DIR
+  _TMP_DIR = os.environ.get('RIETVELD_TMP_DIR', None)
+  if _TMP_DIR is None:
+    _TMP_DIR = tempfile.mkdtemp(TMP_SUFFIX)
+    atexit.register(shutil.rmtree, _TMP_DIR, ignore_errors=True)
+    os.environ['RIETVELD_TMP_DIR'] = _TMP_DIR
+  return _TMP_DIR
 
 
 class TestFailed(Exception):
@@ -49,50 +46,6 @@ class TestFailed(Exception):
 class TestAbort(Exception):
   def __init__(self, name):
     super(TestAbort, self).__init__(name, traceback.format_exc())
-
-
-class Test(object):
-  _current_expectation = UNSET
-
-  def __init__(self, test_func, expect_path, args=None,
-               kwargs=None):
-    self.test_func = test_func
-    self.args = args or ()
-    self.kwargs = kwargs or {}
-
-    if expect_path.startswith(TEST_ROOT_PATH+'/'):
-      expect_path = expect_path[len(TEST_ROOT_PATH)+1:]
-    assert expect_path[0] != '/'
-    self.name = os.path.splitext(expect_path)[0]
-    expect_path += '.yaml'
-    self.expect_path = os.path.join(EXPECT_ROOT_PATH, expect_path)
-
-  @property
-  def current_expectation(self):
-    if self._current_expectation is UNSET:
-      try:
-        with open(self.expect_path, 'r') as f:
-          self._current_expectation = yaml.load(f, YAMLLoader)
-      except:
-        self._current_expectation = None
-    return self._current_expectation
-
-  def train(self):
-    ret = None
-    current = self.current_expectation
-    new = self.test_func(*self.args, **self.kwargs)
-    if new != current:
-      ret = 'Updated expectations for %r.' % self.name
-      lazy_mkdir(os.path.dirname(self.expect_path))
-      with open(self.expect_path, 'w') as f:
-        yaml.dump(new, f, YAMLDumper, default_flow_style=False)
-    return ret
-
-  def run(self):
-    current = self.current_expectation
-    new = self.test_func(*self.args, **self.kwargs)
-    if not new or not current or new != current:
-      raise TestFailed(self.name, new, current)
 
 
 POLL_IVAL = 0.1
@@ -112,7 +65,7 @@ def TestRunner(diediedie, training, test_queue, result_queue):
         m = test.train if training else test.run
         rslt = m()
       except Exception as e:
-        rslt = e
+        rslt = e, traceback.format_exc()
       result_queue.put((test.name, rslt))
       test_queue.task_done()
   finally:
@@ -128,19 +81,20 @@ def TestResultProcessor(diediedie, result_queue):
       continue
 
     name, data = result
-    print '%s: %s' % (name, data or 'OK')
+    print '%s: %r' % (name, data or 'OK')
     result_queue.task_done()
 
 
-TMP_SUFFIX = '.rietveld_tests'
-
 def run_all_tests():
+  tmp_dir = get_tmp_dir()
+
   for f in glob.glob(os.path.join(tempfile.gettempdir(), '*%s' % TMP_SUFFIX)):
+    if f == tmp_dir:
+      continue
     print 'removing left-over temp dir %r' % f
     shutil.rmtree(f, ignore_errors=True)
 
-  tmp_dir = tempfile.mkdtemp(TMP_SUFFIX)
-  coverage_base = os.path.join(tmp_dir, '.coverage')
+  coverage_base = os.path.join(get_tmp_dir(), '.coverage')
   config_file = os.path.join(tmp_dir, 'coverage.cfg')
   usercustomize_file = os.path.join(tmp_dir, 'lib', 'python', 'site-packages',
                                     'usercustomize.py')
@@ -149,6 +103,10 @@ def run_all_tests():
 
   bad = []
   try:
+    omitted_paths = [
+      'codereview', 'static', 'templates', 'tools', 'mapreduce', 'test*'
+    ]
+
     with open(config_file, 'w') as f:
       print >> f, '[run]'
       print >> f, 'parallel = True'
@@ -156,18 +114,73 @@ def run_all_tests():
       print >> f, 'include ='
       print >> f, '  %s/*' % SRC_ROOT_PATH
       print >> f, 'omit ='
-      print >> f, '  %s/codereview' % SRC_ROOT_PATH
-      print >> f, '  %s/static' % SRC_ROOT_PATH
-      print >> f, '  %s/templates' % SRC_ROOT_PATH
-      print >> f, '  %s/tools' % SRC_ROOT_PATH
-      print >> f, '  %s/mapreduce' % SRC_ROOT_PATH
-      print >> f, '  %s/test*' % SRC_ROOT_PATH
+      for p in omitted_paths:
+        print >> f, '  %s/%s/*' % (SRC_ROOT_PATH, p)
       print >> f, '  %s/*/__init__.py' % SRC_ROOT_PATH
 
     os.makedirs(os.path.dirname(usercustomize_file))
     with open(usercustomize_file, 'w') as f:
+      # Hack to allow coverage to save data even inside devappserver2's
+      # sandbox.  Cool dynamic injection into the module closure, bro.
+      print >> f, 'import coverage.data'
+      print >> f, 'coverage.data.open = open'
+      print >> f
+
+      # devappserver indiscriminantly uses an uncatchable SIGKILL instead of
+      # a SIGTERM, so politely fix that for them.
+      print >> f, 'import subprocess'
+      print >> f
+      print >> f, 'subprocess.Popen.kill = ('
+      print >> f, '  lambda self: self.send_signal(signal.SIGTERM))'
+      print >> f
+
+      # devappserver also stubs a couple of these methods which makes
+      # coverage's data_suffix be fairly deterministic, which makes the coverage
+      # names collide.
+      print >> f, 'import os'
+      print >> f, 'import random'
+      print >> f, 'import socket'
+      print >> f, 'data_suffix = "%s.%s.%06d" % ('
+      print >> f, '  socket.gethostname(), os.getpid(),'
+      print >> f, '  random.randint(0, 999999))'
+      print >> f
+
+      # Fire up coverage
       print >> f, 'import coverage'
-      print >> f, 'coverage.process_startup()'
+      print >> f
+      print >> f, 'cov = coverage.coverage(config_file=%r,' % config_file
+      print >> f, '                        data_suffix=data_suffix)'
+      print >> f, 'cov.start()'
+      print >> f
+
+      # Now for the monkeypatch. We want to install our own handlers for
+      # TERM and INT, but ALSO wrap any handlers which devappserver will
+      # install.
+      print >> f, 'import signal'
+      print >> f, 'def shtap_wrapper(f):'
+      print >> f, '  def wrapped(sig, frame):'
+      print >> f, '    if cov._started:'
+      print >> f, '      cov.stop()'
+      print >> f, '      cov.save()'
+      print >> f, '    if callable(f):'
+      print >> f, '      f(sig, frame)'
+      print >> f, '    elif f == signal.SIG_IGN:'
+      print >> f, '      pass'
+      print >> f, '    elif sig == signal.SIGINT:'
+      print >> f, '      raise KeyboardInterrupt()'
+      print >> f, '    else:'
+      print >> f, '      os._exit(1)'
+      print >> f, '  return wrapped'
+      print >> f, 'def new_signal(signum, handler, _orig=signal.signal):'
+      print >> f, '  return _orig(signum, shtap_wrapper(handler))'
+      print >> f, 'signal.signal = new_signal'
+      print >> f, 'signal.signal(signal.SIGTERM, signal.SIG_DFL)'
+      print >> f, 'signal.signal(signal.SIGINT, signal.SIG_DFL)'
+      print >> f
+
+      # And do it the normal way for good measure.
+      print >> f, 'import atexit'
+      print >> f, 'atexit.register(shtap_wrapper(signal.SIG_IGN), 0, 0)'
 
     os.environ['PYTHONUSERBASE'] = tmp_dir
     os.environ['COVERAGE_PROCESS_START'] = config_file
@@ -176,8 +189,9 @@ def run_all_tests():
     os.environ['SERVER_SOFTWARE'] = 'Dev-Testing'
 
     sys.path.insert(0, SRC_ROOT_PATH)
-  except Exception as e:
-    print 'Failed to set up environment!', e
+  except Exception:
+    print 'Failed to set up environment!'
+    print traceback.print_exc()
     return
 
   tests_run = 0
@@ -194,18 +208,11 @@ def run_all_tests():
       p.start()
 
     # Import everything ending with _test and feed m.GenTests(self) into q.
-    for base, _, fnames in os.walk(TEST_ROOT_PATH):
-      mod_base = 'tests_v2.' + base[len(TEST_ROOT_PATH):].replace('/', '.')
-      for fname in fnames:
-        if fname.endswith('_test.py'):
-          mod_name = mod_base + fname[:-3]
-          mod = __import__(mod_name, fromlist=['GenTests'])
-          if not hasattr(mod, 'GenTests'):
-            print 'Skipping %s because it does not have GenTests' % mod_name
-            continue
-          for test in mod.GenTests(Test):
-            test_queue.put(test)
-            tests_run += 1
+    skip_dirs = ['support']
+    for m, _ in import_helper(TEST_ROOT_PATH, 'tests', ['GenTests'], skip_dirs):
+      for test in m.GenTests():
+        test_queue.put(test)
+        tests_run += 1
 
     test_queue.join()
     result_queue.join()
@@ -231,8 +238,26 @@ def run_all_tests():
   print 'Coverage report:'
   c.report()
 
-  shutil.rmtree(tmp_dir, ignore_errors=True)
 
+def import_helper(path, suffix, fromlist, skip_dirs=()):
+  for base, dnames, fnames in os.walk(path):
+    for skip in skip_dirs:
+      if skip in dnames:
+        dnames.remove(skip)
+    for fname in fnames:
+      if fname.endswith('_%s.py' % suffix):
+        mod_base = 'tests_v2' + (
+          base[len(TEST_ROOT_PATH):]
+          .replace(os.path.sep, '.')
+        )
+        mod_name = '.'.join((mod_base, fname[:-3]))
+        mod = __import__(mod_name, fromlist=fromlist)
+        for x in fromlist:
+          if not hasattr(mod, x):
+            print 'Skipping %s because it does not have %s' % (mod_name, x)
+            break
+        else:
+          yield mod, os.path.join(base, fname)
 
 if __name__ == '__main__':
   run_all_tests()

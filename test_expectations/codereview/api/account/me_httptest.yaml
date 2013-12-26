@@ -1,0 +1,43 @@
+- request:
+  - 0
+  - GET
+  - codereview/api/v2/accounts/me
+  response:
+    code: 500
+    json:
+      msg: '''NoneType'' object has no attribute ''to_dict'''
+      status:
+        code: 500
+        type: SERVER_ERROR
+- request:
+  - 1
+  - GET
+  - _ah/login?action=Login&admin=False&email=test%40example.com
+  response:
+    code: 302
+    raw: []
+- request:
+  - 2
+  - GET
+  - codereview/api/v2/accounts/me
+  response:
+    code: 200
+    json:
+      data:
+        created: '2013-12-26 20:33:46.384157'
+        default_column_width: 80
+        default_context: 10
+        email: test@example.com
+        fresh: true
+        lower_email: test@example.com
+        lower_nickname: test
+        modified: '2013-12-26 20:33:46.384689'
+        nickname: test
+        notify_by_chat: false
+        notify_by_email: true
+        user: test@example.com
+        xsrf: eyJzdGFtcCI6IDEzODgwOTAwMjYsICJ0YWciOiAiNjA2ZWE5MjBkYzJmZjliMDcyOGI5OGRlMTRkNDcyNWFlNTZiZGY2ZGJiZDk0NjEzODAxMGYzZDEwM2M2ZjY4ZiJ9
+        xsrf_secret: null
+      status:
+        code: 200
+        type: OK

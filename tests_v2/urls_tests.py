@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from framework import account
+def url_test():
+  import urls
+  return {'urls': map(str, urls.urlpatterns)}
 
-from . import auth_models
-
-account.ACCOUNT_MODEL = auth_models.Account
-
-API_PREFIX = 'codereview/api/v2'
+def GenTests():
+  from tests_v2.support.test import Test
+  import os
+  expected = os.path.splitext(__file__)[0]
+  yield Test(url_test, expected)

@@ -96,13 +96,18 @@ def check_xsrf(func):
 def default_process_request(request):
   # TODO(iannucci):  Check mimetype?
   ret = None
-  try:
-    ret = json.load(request)
-  except:
-    logging.exception('Bad JSON request body')
+  # TODO(iannucci): see if we can do this without reading it all into memory?
+  body = request.read()
+  if len(body) == 0:
+    return {}
+  else:
+    try:
+      ret = json.loads(body)
+    except:
+      logging.exception('Bad JSON request body')
 
   if not ret or not isinstance(ret, dict):
-    raise exceptions.BadData('Expected JSON object in request body.')
+    raise exceptions.BadData('Expected JSON object in request body')
   return ret
 
 
@@ -115,7 +120,7 @@ class RESTCollectionHandler(object):
   PREFIX = ''
   SPECIAL_ROUTES = {}
   MIDDLEWARE = ()
-  PROCESS_REQUEST = default_process_request
+  PROCESS_REQUEST = None
 
   # e.g. post_async, get_cool_hat_async
   # We reserve OPTIONS to implement automatic explorable API endpoint.
@@ -144,7 +149,7 @@ class RESTCollectionHandler(object):
   @classmethod
   def key_pairs(cls):
     ret = [] if cls.PARENT is None else cls.PARENT.key_pairs()
-    ret.append((cls.model_name, cls.ID_TYPE))
+    ret.append((cls.model_name(), cls.ID_TYPE))
     return ret
 
   @classmethod
@@ -183,7 +188,7 @@ class RESTCollectionHandler(object):
           continue
 
         mware = ((middleware.MethodOverride(),
-                  KeyMiddleware(key_pairs, single)) +
+                  KeyMiddleware(key_pairs, not single)) +
                 cls.MIDDLEWARE +
                 (middleware.JSONResponseMiddleware(),))
 
@@ -193,20 +198,22 @@ class RESTCollectionHandler(object):
                                '_' + route if route else '')
         methods = {}
         for method_name, func in method_funcs.iteritems():
-          @functools.wraps(func)
-          @ndb.toplevel
-          def handler_method(request, *args, **kwargs):
-            assert not kwargs  # would be from django's url router, but we're
-                            # usurping kwargs for processed request data
-            if getattr(func, 'check_xsrf', (method_name != 'get')):
-              xsrf.assert_xsrf()
+          def closure(method_name, func):
+            @functools.wraps(func)
+            @ndb.toplevel
+            def handler_method(request, *args, **kwargs):
+              assert not kwargs  # would be from django's url router, but we're
+                              # usurping kwargs for processed request data
+              if getattr(func, 'check_xsrf', (method_name != 'get')):
+                xsrf.assert_xsrf()
 
-            data = cls.PROCESS_REQUEST(request)
-            if isinstance(data, dict):
-              return func(inst, *args, **data).get_result()
-            else:
-              return func(inst, *(args + (data,))).get_result()
-          methods[method_name] = handler_method
+              data = (cls.PROCESS_REQUEST or default_process_request)(request)
+              if isinstance(data, dict):
+                return func(inst, *args, **data).get_result()
+              else:
+                return func(inst, *(args + (data,))).get_result()
+            return handler_method
+          methods[method_name] = closure(method_name, func)
         ret.append(url(
           url_regex, handler.RequestHandler(mware, **methods), name=name))
 
