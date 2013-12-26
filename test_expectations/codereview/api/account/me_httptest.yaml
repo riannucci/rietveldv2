@@ -3,12 +3,13 @@
   - GET
   - codereview/api/v2/accounts/me
   response:
-    code: 500
+    code: 302
     json:
-      msg: '''NoneType'' object has no attribute ''to_dict'''
+      location: /_ah/login?continue=http%3A//SERVER%3APORT/codereview/api/v2/accounts/me
+      msg: Needs login.
       status:
-        code: 500
-        type: SERVER_ERROR
+        code: 302
+        type: REDIRECT
 - request:
   - 1
   - GET
@@ -24,19 +25,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-26 20:33:46.384157'
+        created: '2013-12-26 22:37:46.705126'
         default_column_width: 80
         default_context: 10
         email: test@example.com
         fresh: true
         lower_email: test@example.com
         lower_nickname: test
-        modified: '2013-12-26 20:33:46.384689'
+        modified: '2013-12-26 22:37:46.705437'
         nickname: test
         notify_by_chat: false
         notify_by_email: true
         user: test@example.com
-        xsrf: eyJzdGFtcCI6IDEzODgwOTAwMjYsICJ0YWciOiAiNjA2ZWE5MjBkYzJmZjliMDcyOGI5OGRlMTRkNDcyNWFlNTZiZGY2ZGJiZDk0NjEzODAxMGYzZDEwM2M2ZjY4ZiJ9
+        xsrf: eyJzdGFtcCI6IDEzODgwOTc0NjYsICJ0YWciOiAiMDE2ZDAxMjMyZjVmMDE2YzYzNTQzODNhZDIwMWY3Y2Y2NmU5ZjkzZmJiNTczYTE3ODZmNzg1NWM4NmE3OGYzYSJ9
         xsrf_secret: null
       status:
         code: 200

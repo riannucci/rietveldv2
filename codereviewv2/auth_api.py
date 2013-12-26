@@ -50,4 +50,6 @@ class Accounts(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get_me_async(self, _key):
     me = yield auth_models.current_account_async()
+    if me is None:
+      raise exceptions.NeedsLogin()
     raise ndb.Return({'data': me.to_dict()})
