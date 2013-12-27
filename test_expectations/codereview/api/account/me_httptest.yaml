@@ -31,9 +31,9 @@
         email: test@example.com
         fresh: true
         lower_email: test@example.com
-        lower_nickname: example.com (689)
+        lower_nickname: test (689)
         modified: '2013-12-27 02:24:34.502548'
-        nickname: example.com (689)
+        nickname: test (689)
         notify_by_chat: false
         notify_by_email: true
         user: test@example.com

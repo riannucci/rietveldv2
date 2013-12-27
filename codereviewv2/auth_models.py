@@ -113,7 +113,7 @@ class Account(ndb.Model):
           acnt = cls(
             key=key,
             user=user,
-            nickname='%s (%s)' % (email[email.index('@')+1:], uniquifier),
+            nickname='%s (%s)' % (email[:email.index('@')], uniquifier),
           )
           acnt.put_async()  # why wait?
       ctx.account = acnt
