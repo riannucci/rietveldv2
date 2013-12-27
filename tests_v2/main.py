@@ -28,6 +28,22 @@ SCRIPT = os.path.abspath(__file__)
 TEST_ROOT_PATH = os.path.dirname(SCRIPT)
 SRC_ROOT_PATH = os.path.dirname(os.path.dirname(SCRIPT))
 
+CONFIG_FILE_TEMPLATE = """
+[run]
+parallel = True
+data_file = %(coverage_base)s
+include =
+  %(root)s/*
+omit =
+  %(root)s/*/__init__.py
+  %(root)s/codereview/*
+  %(root)s/static/*
+  %(root)s/templates/*
+  %(root)s/tools/*
+  %(root)s/mapreduce/*
+  %(root)s/test*
+"""
+
 TMP_SUFFIX = '.rietveld_tests'
 _TMP_DIR = None
 def get_tmp_dir():
@@ -103,84 +119,15 @@ def run_all_tests():
 
   bad = []
   try:
-    omitted_paths = [
-      'codereview', 'static', 'templates', 'tools', 'mapreduce', 'test*'
-    ]
-
     with open(config_file, 'w') as f:
-      print >> f, '[run]'
-      print >> f, 'parallel = True'
-      print >> f, 'data_file = %s' % coverage_base
-      print >> f, 'include ='
-      print >> f, '  %s/*' % SRC_ROOT_PATH
-      print >> f, 'omit ='
-      for p in omitted_paths:
-        print >> f, '  %s/%s/*' % (SRC_ROOT_PATH, p)
-      print >> f, '  %s/*/__init__.py' % SRC_ROOT_PATH
+      f.write(CONFIG_FILE_TEMPLATE % {
+        'root': SRC_ROOT_PATH,
+        'coverage_base': coverage_base
+      })
 
     os.makedirs(os.path.dirname(usercustomize_file))
-    with open(usercustomize_file, 'w') as f:
-      # Hack to allow coverage to save data even inside devappserver2's
-      # sandbox.  Cool dynamic injection into the module closure, bro.
-      print >> f, 'import coverage.data'
-      print >> f, 'coverage.data.open = open'
-      print >> f
-
-      # devappserver indiscriminantly uses an uncatchable SIGKILL instead of
-      # a SIGTERM, so politely fix that for them.
-      print >> f, 'import subprocess'
-      print >> f
-      print >> f, 'subprocess.Popen.kill = ('
-      print >> f, '  lambda self: self.send_signal(signal.SIGTERM))'
-      print >> f
-
-      # devappserver also stubs a couple of these methods which makes
-      # coverage's data_suffix be fairly deterministic, which makes the coverage
-      # names collide.
-      print >> f, 'import os'
-      print >> f, 'import random'
-      print >> f, 'import socket'
-      print >> f, 'data_suffix = "%s.%s.%06d" % ('
-      print >> f, '  socket.gethostname(), os.getpid(),'
-      print >> f, '  random.randint(0, 999999))'
-      print >> f
-
-      # Fire up coverage
-      print >> f, 'import coverage'
-      print >> f
-      print >> f, 'cov = coverage.coverage(config_file=%r,' % config_file
-      print >> f, '                        data_suffix=data_suffix)'
-      print >> f, 'cov.start()'
-      print >> f
-
-      # Now for the monkeypatch. We want to install our own handlers for
-      # TERM and INT, but ALSO wrap any handlers which devappserver will
-      # install.
-      print >> f, 'import signal'
-      print >> f, 'def shtap_wrapper(f):'
-      print >> f, '  def wrapped(sig, frame):'
-      print >> f, '    if cov._started:'
-      print >> f, '      cov.stop()'
-      print >> f, '      cov.save()'
-      print >> f, '    if callable(f):'
-      print >> f, '      f(sig, frame)'
-      print >> f, '    elif f == signal.SIG_IGN:'
-      print >> f, '      pass'
-      print >> f, '    elif sig == signal.SIGINT:'
-      print >> f, '      raise KeyboardInterrupt()'
-      print >> f, '    else:'
-      print >> f, '      os._exit(1)'
-      print >> f, '  return wrapped'
-      print >> f, 'def new_signal(signum, handler, _orig=signal.signal):'
-      print >> f, '  return _orig(signum, shtap_wrapper(handler))'
-      print >> f, 'signal.signal = new_signal'
-      print >> f, 'signal.signal(signal.SIGTERM, signal.SIG_DFL)'
-      print >> f, 'signal.signal(signal.SIGINT, signal.SIG_DFL)'
-      print >> f
-
-      # And do it the normal way for good measure.
-      print >> f, 'import atexit'
-      print >> f, 'atexit.register(shtap_wrapper(signal.SIG_IGN), 0, 0)'
+    shutil.copyfile(os.path.join(TEST_ROOT_PATH, 'usercustomize.tpl'),
+                    usercustomize_file)
 
     os.environ['PYTHONUSERBASE'] = tmp_dir
     os.environ['COVERAGE_PROCESS_START'] = config_file

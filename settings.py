@@ -39,7 +39,6 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.http.ConditionalGetMiddleware',
     'codereview.middleware.RedirectToHTTPSMiddleware',
     'codereview.middleware.AddHSTSHeaderMiddleware',
-    'codereview.middleware.AddUserToRequestMiddleware',
     'codereview.middleware.PropagateExceptionMiddleware',
 )
 ROOT_URLCONF = 'urls'

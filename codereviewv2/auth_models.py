@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
+
 from google.appengine.ext import ndb
 
 from django.conf import settings
 
 from framework import xsrf, account
+from framework.monkeytest import fake_time
 
 
 class AccountProperty(account.UserProperty):
@@ -57,8 +60,8 @@ class Account(ndb.Model):
   lower_email = ndb.ComputedProperty(lambda self: self._get_email().lower())  # pylint: disable=W0212
   lower_nickname = ndb.ComputedProperty(lambda self: self.nickname.lower())
 
-  created = ndb.DateTimeProperty(auto_now_add=True)
-  modified = ndb.DateTimeProperty(auto_now=True)
+  created = fake_time.FakeableDateTimeProperty(auto_now_add=True)
+  modified = fake_time.FakeableDateTimeProperty(auto_now=True)
 
   @classmethod
   def email_key(cls, email):
@@ -103,7 +106,9 @@ class Account(ndb.Model):
 
           # we have to treat user_id() as a str according to the docs, so turn
           # it into a long by hashing it.
-          uniquifier = hash(user.user_id()) % 1337
+          hsh = hashlib.md5(user.user_id()).digest()[:8]
+          hsh = sum(ord(x) << i for i, x in enumerate(reversed(hsh)))
+          uniquifier = hsh % 1337
 
           acnt = cls(
             key=key,

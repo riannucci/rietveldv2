@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sys
-import subprocess
 import functools
 import json
+import mmap
+import os
+import random
 import re
 import signal
-import time
+import struct
+import subprocess
+import sys
 
 import requests
 
@@ -73,7 +75,8 @@ class EasyResponse(object):
 
 
 class HttpTestApi(object):
-  def __init__(self, base_url, resource_prefix):
+  def __init__(self, add_time_fn, base_url, resource_prefix):
+    self._add_time_fn = add_time_fn
     self._base_url = base_url
 
     self.auto_kwargs = {}
@@ -83,6 +86,9 @@ class HttpTestApi(object):
     self._session = requests.Session()
 
     self.resource_prefix = resource_prefix
+
+  def add_time(self, amount=None):
+    return self._add_time_fn(amount)
 
   @property
   def resource_prefix(self):
@@ -95,6 +101,7 @@ class HttpTestApi(object):
     self._resource_prefix = val
 
   def request(self, method, resource, **kwargs):
+    self.add_time()
     resource_prefix = kwargs.pop('resource_prefix', self.resource_prefix)
 
     j = kwargs.pop('json', None)
@@ -135,6 +142,8 @@ class HttpTestApi(object):
 
 
 class HttpTest(Test):
+  TIME_PACKER = struct.Struct('!d')
+
   def __init__(self, mod_name, infile, resource_prefix):
     self.mod_name = mod_name
     self.infile = infile
@@ -149,11 +158,47 @@ class HttpTest(Test):
 
     self.storage_path = os.path.join(get_tmp_dir(), 'http_test', self.name)
     os.makedirs(self.storage_path)
+    self._timefile = os.path.join(self.storage_path, '.timefile')
+
+    self._timeval = None
+    self._timemap = None
+    self._timerng = None
+
+  @property
+  def timerng(self):
+    if self._timerng is None:
+      self._timerng = random.Random(self.name)
+    return self._timerng
+
+  @property
+  def timemap(self):
+    if self._timemap is None:
+      fd = os.open(self._timefile, os.O_RDWR | os.O_CREAT)
+      os.ftruncate(fd, self.TIME_PACKER.size)
+      self._timemap = mmap.mmap(fd, self.TIME_PACKER.size,
+                                access=mmap.ACCESS_WRITE)
+    return self._timemap
+
+  def set_time(self, val=None):
+    self._timeval = val or self._timeval
+    self.TIME_PACKER.pack_into(self.timemap, 0, self._timeval)
+
+  def add_time(self, amount=None):
+    if amount is None:
+      amount = (self.timerng.random() * 59) + 1
+    assert isinstance(amount, float) and amount > 0
+    self._timeval += amount
+    self.set_time()
 
   def _start_server(self):
     # Another (possibly better) approach would be generating a fixed port
     # schema based on which multiprocess Process is actually executing the test.
     assert not self.service
+
+    env = os.environ.copy()
+    env['FAKE_TIME_OBJ'] = self._timefile
+    self.set_time(1388110998.37947)  # it seemed like a good time at the time.
+
     self.service = subprocess.Popen(
       [
         'dev_appserver.py',
@@ -164,7 +209,9 @@ class HttpTest(Test):
       ],
       stderr=subprocess.PIPE,
       stdout=sys.stdout,
+      env=env,
     )
+
     while True:
       line = self.service.stderr.readline()
       if 'Starting admin server at:' in line:
@@ -186,8 +233,7 @@ class HttpTest(Test):
     self._start_server()
     try:
       func = __import__(self.mod_name, fromlist=['Execute']).Execute
-
-      api = HttpTestApi(self.service_url, self.resource_prefix)
+      api = HttpTestApi(self.add_time, self.service_url, self.resource_prefix)
       func(api)
       return api.state
     finally:
