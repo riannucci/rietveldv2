@@ -35,6 +35,8 @@ class Accounts(rest_handler.RESTCollectionHandler):
     ]
     if me is None:
       raise exceptions.NeedsLogin()
+    if account is None:
+      raise exceptions.NotFound("User '%s' does not exist" % key.id())
 
     # TODO(iannucci):  Old user popup included # of issues created and
     # # of issues 'reviewed' (which was really just the number of issues which
@@ -52,4 +54,4 @@ class Accounts(rest_handler.RESTCollectionHandler):
     me = yield auth_models.current_account_async()
     if me is None:
       raise exceptions.NeedsLogin()
-    raise ndb.Return({'data': me.to_dict()})
+    raise ndb.Return(me.to_dict())

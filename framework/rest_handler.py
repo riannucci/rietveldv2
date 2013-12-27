@@ -209,9 +209,18 @@ class RESTCollectionHandler(object):
 
               data = (cls.PROCESS_REQUEST or default_process_request)(request)
               if isinstance(data, dict):
-                return func(inst, *args, **data).get_result()
+                r = func(inst, *args, **data).get_result()
               else:
-                return func(inst, *(args + (data,))).get_result()
+                r = func(inst, *(args + (data,))).get_result()
+              if isinstance(r, dict):
+                status = r.pop(middleware.STATUS_CODE, None)
+                headers = r.pop(middleware.HEADERS, None)
+                r = {'data': r}
+                if status:
+                  r[middleware.STATUS_CODE] = status
+                if headers:
+                  r[middleware.HEADERS] = headers
+              return r
             return handler_method
           methods[method_name] = closure(method_name, func)
         ret.append(url(

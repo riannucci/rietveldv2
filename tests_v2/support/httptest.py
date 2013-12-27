@@ -128,8 +128,11 @@ class HttpTestApi(object):
     self.GET('_ah/login', resource_prefix='', params={
       'action': 'Login', 'admin': str(admin), 'email': user})
 
-  def logoff(self):
+  def logout(self):
     self.GET('_ah/login', resource_prefix='', params={'action': 'Logout'})
+    # There's a bit of a bug when getting set-cookie= statements from localhost
+    # so help things along a bit.
+    del self._session.cookies['dev_appserver_login']
 
   def comment(self, comment):
     self.state.append({'comment': comment})
