@@ -62,7 +62,7 @@ class EasyResponse(object):
 
   def to_dict(self):
     ret = {
-      'request': [self.step_num, self.method, self.resource],
+      'request': '%s %r' % (self.method, str(self.resource)),
       'response': {
         'code': self.code,
       }

@@ -1,14 +1,8 @@
-- request:
-  - 0
-  - GET
-  - _ah/login?action=Login&admin=False&email=test%40example.com
+- request: GET '_ah/login?action=Login&admin=False&email=test%40example.com'
   response:
     code: 302
     raw: []
-- request:
-  - 1
-  - GET
-  - codereview/api/v2/accounts/me
+- request: GET 'codereview/api/v2/accounts/me'
   response:
     code: 200
     json:
@@ -29,10 +23,7 @@
       status:
         code: 200
         type: OK
-- request:
-  - 2
-  - GET
-  - codereview/api/v2/accounts/test@example.com
+- request: GET 'codereview/api/v2/accounts/test@example.com'
   response:
     code: 200
     json:
@@ -53,17 +44,11 @@
       status:
         code: 200
         type: OK
-- request:
-  - 3
-  - GET
-  - _ah/login?action=Logout
+- request: GET '_ah/login?action=Logout'
   response:
     code: 302
     raw: []
-- request:
-  - 4
-  - GET
-  - codereview/api/v2/accounts/test@example.com
+- request: GET 'codereview/api/v2/accounts/test@example.com'
   response:
     code: 302
     json:
@@ -72,17 +57,11 @@
       status:
         code: 302
         type: REDIRECT
-- request:
-  - 5
-  - GET
-  - _ah/login?action=Login&admin=True&email=bob%40VictoryLane.co.uk
+- request: GET '_ah/login?action=Login&admin=True&email=bob%40VictoryLane.co.uk'
   response:
     code: 302
     raw: []
-- request:
-  - 6
-  - GET
-  - codereview/api/v2/accounts/me
+- request: GET 'codereview/api/v2/accounts/me'
   response:
     code: 200
     json:
@@ -103,10 +82,7 @@
       status:
         code: 200
         type: OK
-- request:
-  - 7
-  - GET
-  - codereview/api/v2/accounts/test@example.com
+- request: GET 'codereview/api/v2/accounts/test@example.com'
   response:
     code: 200
     json:
@@ -116,10 +92,7 @@
       status:
         code: 200
         type: OK
-- request:
-  - 8
-  - GET
-  - codereview/api/v2/accounts/bob@VictoryLane.co.uk
+- request: GET 'codereview/api/v2/accounts/bob@VictoryLane.co.uk'
   response:
     code: 200
     json:
@@ -140,10 +113,7 @@
       status:
         code: 200
         type: OK
-- request:
-  - 9
-  - GET
-  - codereview/api/v2/accounts/BOB@Victorylane.co.uk
+- request: GET 'codereview/api/v2/accounts/BOB@Victorylane.co.uk'
   response:
     code: 404
     json:

@@ -1,7 +1,4 @@
-- request:
-  - 0
-  - GET
-  - codereview/api/v2/accounts/me
+- request: GET 'codereview/api/v2/accounts/me'
   response:
     code: 302
     json:
@@ -10,17 +7,11 @@
       status:
         code: 302
         type: REDIRECT
-- request:
-  - 1
-  - GET
-  - _ah/login?action=Login&admin=False&email=test%40example.com
+- request: GET '_ah/login?action=Login&admin=False&email=test%40example.com'
   response:
     code: 302
     raw: []
-- request:
-  - 2
-  - GET
-  - codereview/api/v2/accounts/me
+- request: GET 'codereview/api/v2/accounts/me'
   response:
     code: 200
     json:
