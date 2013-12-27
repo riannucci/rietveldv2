@@ -23,7 +23,6 @@ from django.core.urlresolvers import reverse
 import jinja2
 
 from framework import middleware, handler, exceptions, query_parser, utils
-from framework.monkeytest import fake_time
 
 from . import issue_models
 from .auth_models import Account
@@ -81,7 +80,7 @@ class MainHandler(handler.RequestHandler):
                 .filter(m.owner == account.user)
                 .order(-m.modified)).fetch_async(limit)
 
-    last_week = fake_time.utcnow() - datetime.timedelta(days=7)
+    last_week = datetime.datetime.utcnow() - datetime.timedelta(days=7)
     closed = (m.query()
               .filter(m.closed == True)
               .filter(m.owner == account.user)

@@ -69,15 +69,3 @@ def new_exit(code, _old_exit=os._exit):  # pylint: disable=W0212
   stop_coverage()
   _old_exit(code)
 os._exit = new_exit  # pylint: disable=W0212
-
-# add fake_time to sys, because it's one of the few modules which survives
-# the sandbox.
-import sys, time
-sys.fake_time = time.time
-if 'FAKE_TIME_OBJ' in os.environ:
-  import mmap, struct
-  unpacker = struct.Struct('!d')
-  time_mmap = mmap.mmap(os.open(os.environ['FAKE_TIME_OBJ'], os.O_RDONLY),
-                        unpacker.size, access=mmap.ACCESS_READ)
-  sys.fake_time = lambda: unpacker.unpack_from(time_mmap)[0]
-  random.seed(sys.fake_time())

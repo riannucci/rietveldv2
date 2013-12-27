@@ -18,12 +18,12 @@ import hmac
 import json
 import logging
 import os
+import time
 
 from google.appengine.ext import ndb
 from google.appengine.api import users
 
 from . import exceptions, account
-from .monkeytest import fake_time
 
 HEADER = 'X-Codereview-XSRF-Token'
 
@@ -93,7 +93,7 @@ def assert_xsrf():
   except:
     raise exceptions.Forbidden('Malformed XSRF token')
 
-  now = fake_time.raw_time()
+  now = time.time()
   if now - stamp > (60 * 60):
     raise exceptions.Forbidden('Expired XSRF token')
 
@@ -102,7 +102,7 @@ def assert_xsrf():
 
 
 def make_header_token():
-  now = int(fake_time.raw_time())
+  now = int(time.time())
   tag = _generate_token(now).encode('hex')
   return base64.urlsafe_b64encode(json.dumps({'stamp': now, 'tag': tag},
                                              sort_keys=True))

@@ -16,19 +16,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:24:34.502548'
+        created: '2013-12-27 02:24:25.614431'
         default_column_width: 80
         default_context: 10
         email: test@example.com
         fresh: true
         lower_email: test@example.com
         lower_nickname: test (689)
-        modified: '2013-12-27 02:24:34.502548'
+        modified: '2013-12-27 02:24:25.614431'
         nickname: test (689)
         notify_by_chat: false
         notify_by_email: true
         user: test@example.com
-        xsrf: eyJzdGFtcCI6IDEzODgxMTEwNzQsICJ0YWciOiAiNTRjYzE1MzE4YjhiZWEzYTJlZDFlNWZlYmFhMTA0YmUyZDg0ZTE4OGZhZDAzNDI0MjE1YWRiMzc4MDgwYzI4MyJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEwNjUsICJ0YWciOiAiZGRmNGEzYjc0MTlkMTVjM2QxODFiZGRmN2Q2NGM1MjYxNzEyODY5MWU1NjEyOTJjZGNhOTBhYmQ0ZTJiYTAyMiJ9
       status:
         code: 200
         type: OK

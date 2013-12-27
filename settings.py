@@ -34,7 +34,10 @@ INSTALLED_APPS = (
     'codereview',
 )
 HSTS_MAX_AGE = 60*60*24*365  # 1 year in seconds.
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE_CLASSES = ()
+if DEBUG:
+  MIDDLEWARE_CLASSES = ('framework.testing.DjangoMockMiddleware',)
+MIDDLEWARE_CLASSES += (
     'django.middleware.common.CommonMiddleware',
     'django.middleware.http.ConditionalGetMiddleware',
     'codereview.middleware.RedirectToHTTPSMiddleware',

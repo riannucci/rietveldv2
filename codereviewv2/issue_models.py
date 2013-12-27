@@ -21,7 +21,6 @@ from google.appengine.ext.ndb import metadata
 
 import cas
 from framework import utils, mixins, exceptions, authed_model
-from framework.monkeytest import fake_time
 
 from . import auth_models, diff
 
@@ -154,8 +153,8 @@ class Issue(mixins.HideableModelMixin):
   # Old Issue models won't have a VERSION field at all
   VERSION = ndb.IntegerProperty(default=2, indexed=False)
 
-  created = fake_time.FakeableDateTimeProperty(auto_now_add=True)
-  modified = fake_time.FakeableDateTimeProperty(auto_now=True)
+  created = ndb.DateTimeProperty(auto_now_add=True)
+  modified = ndb.DateTimeProperty(auto_now=True)
 
   subject = ndb.StringProperty()
   description = ndb.TextProperty()
@@ -408,7 +407,7 @@ class Comment(ndb.Model):
   body = ndb.TextProperty()
 
   owner = auth_models.AccountProperty(auto_current_user_add=True, indexed=False)
-  created = fake_time.FakeableDateTimeProperty(auto_now_add=True, indexed=False)
+  created = ndb.DateTimeProperty(auto_now_add=True, indexed=False)
 
   def populate(self, **data):
     assert 'owner' not in data
@@ -427,7 +426,7 @@ class Patchset(mixins.HideableModelMixin):
 
   created_by = auth_models.AccountProperty(auto_current_user_add=True,
                                         indexed=False)
-  created = fake_time.FakeableDateTimeProperty(indexed=False, auto_now_add=True)
+  created = ndb.DateTimeProperty(indexed=False, auto_now_add=True)
 
   # This is the only mutable field in Patchset
   raw_comments = ndb.LocalStructuredProperty(Comment, repeated=True,
@@ -518,7 +517,7 @@ class Message(authed_model.AuthedModel):
   approval = ndb.BooleanProperty(indexed=False, default=False)
   disapproval = ndb.BooleanProperty(indexed=False, default=False)
   issue_was_closed = ndb.BooleanProperty()
-  created = fake_time.FakeableDateTimeProperty(indexed=False, auto_now_add=True)
+  created = ndb.DateTimeProperty(indexed=False, auto_now_add=True)
 
   #### Hook overrides
   def _pre_put_hook(self):
@@ -545,7 +544,7 @@ class Message(authed_model.AuthedModel):
 
 class DraftComment(Comment):
   patchset = ndb.KeyProperty(kind=Patchset)
-  modified = fake_time.FakeableDateTimeProperty(auto_now=True)
+  modified = ndb.DateTimeProperty(auto_now=True)
 
   def populate(self, **data):
     assert 'modified' not in data

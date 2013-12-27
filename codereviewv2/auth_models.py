@@ -19,7 +19,6 @@ from google.appengine.ext import ndb
 from django.conf import settings
 
 from framework import xsrf, account
-from framework.monkeytest import fake_time
 
 
 class AccountProperty(account.UserProperty):
@@ -60,8 +59,8 @@ class Account(ndb.Model):
   lower_email = ndb.ComputedProperty(lambda self: self._get_email().lower())  # pylint: disable=W0212
   lower_nickname = ndb.ComputedProperty(lambda self: self.nickname.lower())
 
-  created = fake_time.FakeableDateTimeProperty(auto_now_add=True)
-  modified = fake_time.FakeableDateTimeProperty(auto_now=True)
+  created = ndb.DateTimeProperty(auto_now_add=True)
+  modified = ndb.DateTimeProperty(auto_now=True)
 
   @classmethod
   def email_key(cls, email):

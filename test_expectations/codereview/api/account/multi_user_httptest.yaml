@@ -7,19 +7,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:24:55.303885'
+        created: '2013-12-27 02:23:55.851941'
         default_column_width: 80
         default_context: 10
         email: test@example.com
         fresh: true
         lower_email: test@example.com
         lower_nickname: test (689)
-        modified: '2013-12-27 02:24:55.303885'
+        modified: '2013-12-27 02:23:55.851941'
         nickname: test (689)
         notify_by_chat: false
         notify_by_email: true
         user: test@example.com
-        xsrf: eyJzdGFtcCI6IDEzODgxMTEwOTUsICJ0YWciOiAiOWM2ODFiNWRjZDAzYjFlMWMxOGEyNDRiNmNjY2FmOTNhYzJkOGVlZDExZWQ3NzU0ZGY1NDI0MDA0MWRiZWEwMCJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEwMzUsICJ0YWciOiAiZTY5MWE4N2FjN2NiMmExYTQ4MmZmMWUyM2E4YzAzOWRjNTJjMWQ1MzUxNzQ5OTI5ZTk5ZjNjMDI3ODA5MzMxMyJ9
       status:
         code: 200
         type: OK
@@ -28,19 +28,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:24:55.303885'
+        created: '2013-12-27 02:23:55.851941'
         default_column_width: 80
         default_context: 10
         email: test@example.com
         fresh: true
         lower_email: test@example.com
         lower_nickname: test (689)
-        modified: '2013-12-27 02:24:55.303885'
+        modified: '2013-12-27 02:23:55.851941'
         nickname: test (689)
         notify_by_chat: false
         notify_by_email: true
         user: test@example.com
-        xsrf: eyJzdGFtcCI6IDEzODgxMTExMDUsICJ0YWciOiAiOTlhMTIzY2RkMmI5ZTY3YzlhODM5ZGIyZWQyYTk1YzdlMzQ2Y2VjZWM2MTVhZTI2ZTJkZDVlMzcxNTcyNmYxYyJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEwOTUsICJ0YWciOiAiYTY1MTg5MzNkODE5YmYxNWIxOThjNmYwZDdjYjlkNDg1NTRmMWQyZTQ2YmE1MmFiMjY2YjZlNTM2Njc3NDZiNCJ9
       status:
         code: 200
         type: OK
@@ -66,19 +66,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:26:07.287084'
+        created: '2013-12-27 02:25:51.206963'
         default_column_width: 80
         default_context: 10
         email: bob@VictoryLane.co.uk
         fresh: true
         lower_email: bob@victorylane.co.uk
         lower_nickname: bob (1020)
-        modified: '2013-12-27 02:26:07.287084'
+        modified: '2013-12-27 02:25:51.206963'
         nickname: bob (1020)
         notify_by_chat: false
         notify_by_email: true
         user: bob@VictoryLane.co.uk
-        xsrf: eyJzdGFtcCI6IDEzODgxMTExNjcsICJ0YWciOiAiMmVmMzg4YTk1MGM4NzkyZDg1NzA2MGMzYmJlZDI2MjEwNDhhOGEyYjkxZDExNDQ2MDg5YzI5NmNiMGRiNjQ5NiJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTExNTEsICJ0YWciOiAiYTYzYmRiMjE0ZjkyNzQxYTBkOGExNjU5N2M5ZTIyNjJlNTQ4NzFkNGU2MWNjMDc5ZGY0YjMxMTZhMzJmNDAxOSJ9
       status:
         code: 200
         type: OK
@@ -97,19 +97,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:26:07.287084'
+        created: '2013-12-27 02:25:51.206963'
         default_column_width: 80
         default_context: 10
         email: bob@VictoryLane.co.uk
         fresh: true
         lower_email: bob@victorylane.co.uk
         lower_nickname: bob (1020)
-        modified: '2013-12-27 02:26:07.287084'
+        modified: '2013-12-27 02:25:51.206963'
         nickname: bob (1020)
         notify_by_chat: false
         notify_by_email: true
         user: bob@VictoryLane.co.uk
-        xsrf: eyJzdGFtcCI6IDEzODgxMTEyNDEsICJ0YWciOiAiN2FhYWUzMDE1Njc5ZmFkZGZlZGUxZmUxYTg1OGFhY2I4OGE0Nzc5OWY0YjFiOGNkNTgzMjdkMDI5MGM4ZDU4NCJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEyMDQsICJ0YWciOiAiMzY2MzhhZGExNGVjZTczYjYxMzZmYTU5NzUwYTU4ZjgyMWNmNDU4ZDJhMjU3YTAxYmU5NjYxNmEwYWVkODRhMCJ9
       status:
         code: 200
         type: OK
