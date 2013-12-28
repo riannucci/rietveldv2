@@ -14,15 +14,17 @@
 # limitations under the License.
 
 import Queue
+import atexit
 import coverage
+import fnmatch
 import glob
 import multiprocessing
 import os
+import re
 import shutil
 import sys
 import tempfile
 import traceback
-import atexit
 
 SCRIPT = os.path.abspath(__file__)
 TEST_ROOT_PATH = os.path.dirname(SCRIPT)
@@ -102,6 +104,20 @@ def TestResultProcessor(diediedie, result_queue):
     result_queue.task_done()
 
 
+def should_run_test(test, include, exclude):
+  """
+  @type test: support.test.Test
+  @type include: re._pattern_type
+  @type exclude: re._pattern_type
+  """
+  ret = True
+  if include:
+    ret = bool(include.match(test.name))
+  if exclude:
+    ret = not bool(exclude.match(test.name))
+  return ret
+
+
 def run_all_tests():
   tmp_dir = get_tmp_dir()
 
@@ -116,7 +132,28 @@ def run_all_tests():
   usercustomize_file = os.path.join(tmp_dir, 'lib', 'python', 'site-packages',
                                     'usercustomize.py')
 
-  train = '--train' in sys.argv
+  try:
+    sys.argv.remove('--train')
+    train = True
+  except ValueError:
+    train = False
+
+  ## Everything else is test patterns
+  include = []
+  exclude = []
+  for x in sys.argv[1:]:
+    if x[0] == '-':
+      exclude.append(x[1:])
+    else:
+      include.append(x)
+
+  include = '|'.join('(?:%s)' % fnmatch.translate(x) for x in include)
+  exclude = '|'.join('(?:%s)' % fnmatch.translate(x) for x in exclude)
+
+  if include:
+    include = re.compile(include)
+  if exclude:
+    exclude = re.compile(exclude)
 
   bad = []
   try:
@@ -161,8 +198,9 @@ def run_all_tests():
     skip_dirs = ['support']
     for m, _ in import_helper(TEST_ROOT_PATH, 'tests', ['GenTests'], skip_dirs):
       for test in m.GenTests():
-        test_queue.put(test)
-        tests_run += 1
+        if should_run_test(test, include, exclude):
+          test_queue.put(test)
+          tests_run += 1
 
     test_queue.join()
     result_queue.join()
