@@ -12,10 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-def url_map():
-  import urls
-  return {'urls': map(str, urls.urlpatterns)}
+def NotAllowed():
+  from framework import handler, exceptions
+  from django.http import HttpRequest
+
+  class TestHandler(handler.RequestHandler):
+    def get(self, request):
+      pass
+
+    def put(self, request):
+      pass
+  th = TestHandler()
+
+  try:
+    req = HttpRequest()
+    req.method = 'POST'
+    th(req)
+  except exceptions.NotAllowed as e:
+    return {
+      'exeption': repr(e),
+      'data': e.DATA,
+    }
+
 
 def GenTests():
   from tests_v2.support.test import BasicTest
-  yield BasicTest(url_map)
+  yield BasicTest(NotAllowed)
+

@@ -17,8 +17,9 @@ import types
 
 from google.appengine.ext import ndb
 
-from django.http import HttpResponseNotAllowed
 from django.core.urlresolvers import resolve
+
+from . import exceptions
 
 class RequestHandler(object):
   """Kinda-sorta like webapp2.RequestHandler."""
@@ -44,16 +45,15 @@ class RequestHandler(object):
 
   @ndb.toplevel
   def __call__(self, request, *args, **kwargs):
-    handler_fn = getattr(self, request.method.lower(), None)
-    if handler_fn is None:
-      return HttpResponseNotAllowed(self.OK_METHODS)
-
     request.route_name = lambda: resolve(request.path).url_name
-
     mware = self.MIDDLEWARE
     args, kwargs = reduce(lambda (a, kw), m: m.pre(request, *a, **kw), mware,
                           (args, kwargs))
+
+    handler_fn = getattr(self, request.method.lower(), None)
     try:
+      if handler_fn is None:
+        raise exceptions.NotAllowed(request.method, self.OK_METHODS)
       ret = handler_fn(request, *args, **kwargs)
     except Exception:
       ret = sys.exc_info()

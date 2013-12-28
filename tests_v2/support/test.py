@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import sys
 
 import yaml
 
@@ -36,18 +37,13 @@ def lazy_mkdir(d):
 class Test(object):
   _current_expectation = UNSET
 
-  def __init__(self, test_func, expect_path, args=None,
-               kwargs=None):
+  def __init__(self, test_func, name, expect, args=None, kwargs=None):
     self._test_func = test_func
     self.args = args or ()
     self.kwargs = kwargs or {}
+    self.expect = expect
+    self.name = name
 
-    if expect_path.startswith(TEST_ROOT_PATH+'/'):
-      expect_path = expect_path[len(TEST_ROOT_PATH)+1:]
-    assert expect_path[0] != '/'
-    self.name = os.path.splitext(expect_path)[0]
-    expect_path += '.yaml'
-    self.expect_path = os.path.join(EXPECT_ROOT_PATH, expect_path)
 
   @property
   def test_func(self):
@@ -57,7 +53,7 @@ class Test(object):
   def current_expectation(self):
     if self._current_expectation is UNSET:
       try:
-        with open(self.expect_path, 'r') as f:
+        with open(self.expect, 'r') as f:
           self._current_expectation = yaml.load(f, YAMLSafeLoader)
       except:
         self._current_expectation = None
@@ -69,8 +65,8 @@ class Test(object):
     new = self.test_func(*self.args, **self.kwargs)
     if new != current:
       ret = 'Updated expectations for %r.' % self.name
-      lazy_mkdir(os.path.dirname(self.expect_path))
-      with open(self.expect_path, 'wb') as f:
+      lazy_mkdir(os.path.dirname(self.expect))
+      with open(self.expect, 'wb') as f:
         yaml.dump(new, f, YAMLSafeDumper, default_flow_style=False,
                   encoding='utf-8')
     return ret
@@ -80,3 +76,19 @@ class Test(object):
     new = self.test_func(*self.args, **self.kwargs)
     if not new or not current or new != current:
       raise TestFailed(self.name, new, current)
+
+
+def test_file_to_name_expectation(path, extra=''):
+  path = os.path.abspath(path)
+  assert path.startswith(TEST_ROOT_PATH+'/')
+  name = os.path.splitext(path[len(TEST_ROOT_PATH)+1:])[0]
+  if extra:
+    name += extra
+  expect = os.path.join(EXPECT_ROOT_PATH, name + '.yaml')
+  return name, expect
+
+
+def BasicTest(test_func, *args, **kwargs):
+  name = sys.modules[test_func.__module__].__file__
+  name, expect = test_file_to_name_expectation(name, '.' + test_func.__name__)
+  return Test(test_func, name, expect, args, kwargs)

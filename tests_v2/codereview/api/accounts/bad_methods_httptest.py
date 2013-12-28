@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-def url_map():
-  import urls
-  return {'urls': map(str, urls.urlpatterns)}
-
-def GenTests():
-  from tests_v2.support.test import BasicTest
-  yield BasicTest(url_map)
+def Execute(api):
+  api.POST('accounts/me')
+  api.POST('accounts/test@example.com')

@@ -14,6 +14,9 @@
 
 """Exception classes."""
 
+from google.appengine.api import users
+
+
 class FrameworkException(Exception):
   """Base class for all exceptions in framework."""
 
@@ -36,6 +39,16 @@ class NotFound(FrameworkException):
     super(NotFound, self).__init__(self.MSG % message)
 
 
+class NotAllowed(FrameworkException):
+  STATUS_CODE = 405
+  MSG = "%s is not an allowed method."
+
+  def __init__(self, method, allowed):
+    super(NotAllowed, self).__init__(self.MSG % method)
+    self.HEADERS = {'Allow': ', '.join(allowed)}
+    self.DATA = {'allowed': allowed}
+
+
 class BadData(FrameworkException):
   """Exception raised when input data is malformed."""
   STATUS_CODE = 400
@@ -46,5 +59,9 @@ class NeedsLogin(FrameworkException):
   account in order to display."""
   STATUS_CODE = 302
 
-  def __init__(self):
+  def __init__(self, request):
     super(NeedsLogin, self).__init__('Needs login.')
+    url = users.create_login_url(
+      request.get_full_path().encode('utf-8'))
+    self.HEADERS = {'Location': url}
+    self.DATA = {'location': url}

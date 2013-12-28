@@ -16,7 +16,6 @@ import json
 import logging
 
 from google.appengine.ext import ndb
-from google.appengine.api import users
 
 from django.http import HttpResponse
 
@@ -157,22 +156,20 @@ class JSONResponseMiddleware(Middleware):
     return ret
 
   def error(self, request, ex_info):
-    if isinstance(ex_info[1], exceptions.NeedsLogin):
-      url = users.create_login_url(
-          request.get_full_path().encode('utf-8'))
-      return self.post(request, {
-        STATUS_CODE: 302,
-        HEADERS: {'Location': url},
-        'location': url,
+    logging.error('Handling JSON error.', exc_info=ex_info)
+    status = getattr(ex_info[1], 'STATUS_CODE', 500)
+    headers = getattr(ex_info[1], 'HEADERS', {})
+    r = {
+      STATUS_CODE: status,
+      HEADERS: headers,
+      'data': {
         'msg': str(ex_info[1]),
-      })
-    else:
-      logging.error('Handling JSON error.', exc_info=ex_info)
-      status = getattr(ex_info[1], 'STATUS_CODE', 500)
-      return self.post(request, {
-        STATUS_CODE: status,
-        'msg': str(ex_info[1])
-      })
+      }
+    }
+    data = getattr(ex_info[1], 'DATA', None)
+    if data:
+      r['data'].update(data)
+    return self.post(request, r)
 
 
 class MethodOverride(Middleware):

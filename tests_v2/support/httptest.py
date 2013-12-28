@@ -23,7 +23,7 @@ import sys
 
 import requests
 
-from .test import Test
+from . import test
 
 from ..main import get_tmp_dir, SRC_ROOT_PATH, import_helper
 
@@ -148,7 +148,7 @@ class HttpTestApi(object):
     return super(HttpTestApi, self).__getattribute__(attr)
 
 
-class HttpTest(Test):
+class HttpTest(test.Test):
   def __init__(self, mod_name, infile, resource_prefix):
     self.mod_name = mod_name
     self.infile = infile
@@ -158,8 +158,9 @@ class HttpTest(Test):
     self.service_url = None
     self.admin_url = None
 
-    expect_path = os.path.splitext(infile)[0]
-    super(HttpTest, self).__init__(None, expect_path)
+    name, expect = test.test_file_to_name_expectation(infile)
+
+    super(HttpTest, self).__init__(None, name, expect)
 
     self.storage_path = os.path.join(get_tmp_dir(), 'http_test', self.name)
     os.makedirs(self.storage_path)

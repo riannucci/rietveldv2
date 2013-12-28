@@ -7,19 +7,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:23:55.851941'
+        created: '2013-12-27 02:23:55.840205'
         default_column_width: 80
         default_context: 10
         email: test@example.com
         fresh: true
         lower_email: test@example.com
         lower_nickname: test (689)
-        modified: '2013-12-27 02:23:55.851941'
+        modified: '2013-12-27 02:23:55.840205'
         nickname: test (689)
         notify_by_chat: false
         notify_by_email: true
         user: test@example.com
-        xsrf: eyJzdGFtcCI6IDEzODgxMTEwMzUsICJ0YWciOiAiZTY5MWE4N2FjN2NiMmExYTQ4MmZmMWUyM2E4YzAzOWRjNTJjMWQ1MzUxNzQ5OTI5ZTk5ZjNjMDI3ODA5MzMxMyJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEwMzUsICJ0YWciOiAiOTM3MTk1ZDhhMDEzM2I0YmQ2MDM2Njk0YmEyMGE4N2EwODAzYjM1NTEzNGI5NjY0MDZiZWUxZmZhY2ZmNjQ2ZCJ9
       status:
         code: 200
         type: OK
@@ -28,19 +28,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:23:55.851941'
+        created: '2013-12-27 02:23:55.840205'
         default_column_width: 80
         default_context: 10
         email: test@example.com
         fresh: true
         lower_email: test@example.com
         lower_nickname: test (689)
-        modified: '2013-12-27 02:23:55.851941'
+        modified: '2013-12-27 02:23:55.840205'
         nickname: test (689)
         notify_by_chat: false
         notify_by_email: true
         user: test@example.com
-        xsrf: eyJzdGFtcCI6IDEzODgxMTEwOTUsICJ0YWciOiAiYTY1MTg5MzNkODE5YmYxNWIxOThjNmYwZDdjYjlkNDg1NTRmMWQyZTQ2YmE1MmFiMjY2YjZlNTM2Njc3NDZiNCJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEwNTQsICJ0YWciOiAiOWUyOWM1ZWE1ZGQ2NGVhN2RjNzQzNTQ5ZjJlOGM5NzUxM2Q4NWU0YzY2MWUyZWZkY2M2N2U0MGZiZTg5NmJjMSJ9
       status:
         code: 200
         type: OK
@@ -50,13 +50,13 @@
     raw: []
 - request: GET 'codereview/api/v2/accounts/test@example.com'
   response:
-    code: 302
+    code: 500
     json:
-      location: /_ah/login?continue=http%3A//SERVER%3APORT/codereview/api/v2/accounts/test%40example.com
-      msg: Needs login.
+      data:
+        msg: __init__() takes exactly 2 arguments (1 given)
       status:
-        code: 302
-        type: REDIRECT
+        code: 500
+        type: SERVER_ERROR
 - request: GET '_ah/login?action=Login&admin=True&email=bob%40VictoryLane.co.uk'
   response:
     code: 302
@@ -66,19 +66,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:25:51.206963'
+        created: '2013-12-27 02:26:28.174094'
         default_column_width: 80
         default_context: 10
         email: bob@VictoryLane.co.uk
         fresh: true
         lower_email: bob@victorylane.co.uk
         lower_nickname: bob (1020)
-        modified: '2013-12-27 02:25:51.206963'
+        modified: '2013-12-27 02:26:28.174094'
         nickname: bob (1020)
         notify_by_chat: false
         notify_by_email: true
         user: bob@VictoryLane.co.uk
-        xsrf: eyJzdGFtcCI6IDEzODgxMTExNTEsICJ0YWciOiAiYTYzYmRiMjE0ZjkyNzQxYTBkOGExNjU5N2M5ZTIyNjJlNTQ4NzFkNGU2MWNjMDc5ZGY0YjMxMTZhMzJmNDAxOSJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTExODgsICJ0YWciOiAiYjM1YjcwYTY3MzU5ZGUwNWZlOTg5ZTA0MDFiYTQyNmI4MzM1ZDkwYjE4MjdhYjRlZWI3ZjUzOWEwYzE4OGMyZCJ9
       status:
         code: 200
         type: OK
@@ -97,19 +97,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:25:51.206963'
+        created: '2013-12-27 02:26:28.174094'
         default_column_width: 80
         default_context: 10
         email: bob@VictoryLane.co.uk
         fresh: true
         lower_email: bob@victorylane.co.uk
         lower_nickname: bob (1020)
-        modified: '2013-12-27 02:25:51.206963'
+        modified: '2013-12-27 02:26:28.174094'
         nickname: bob (1020)
         notify_by_chat: false
         notify_by_email: true
         user: bob@VictoryLane.co.uk
-        xsrf: eyJzdGFtcCI6IDEzODgxMTEyMDQsICJ0YWciOiAiMzY2MzhhZGExNGVjZTczYjYxMzZmYTU5NzUwYTU4ZjgyMWNmNDU4ZDJhMjU3YTAxYmU5NjYxNmEwYWVkODRhMCJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEyODAsICJ0YWciOiAiZmU2NWU4NTljYjhmZDhjYzEwMDIxZTI1NjU1MDY4NjY1ZTdmNjc1YmExNWU4MWJlN2RkOGU1YzU5MWI1ZjAzMSJ9
       status:
         code: 200
         type: OK
@@ -117,7 +117,8 @@
   response:
     code: 404
     json:
-      msg: User 'BOB@Victorylane.co.uk' does not exist was not found.
+      data:
+        msg: User 'BOB@Victorylane.co.uk' does not exist was not found.
       status:
         code: 404
         type: ERROR

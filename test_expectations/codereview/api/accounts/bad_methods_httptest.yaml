@@ -1,0 +1,22 @@
+- request: POST 'codereview/api/v2/accounts/me'
+  response:
+    code: 405
+    json:
+      data:
+        allowed:
+        - GET
+        msg: POST is not an allowed method.
+      status:
+        code: 405
+        type: ERROR
+- request: POST 'codereview/api/v2/accounts/test@example.com'
+  response:
+    code: 405
+    json:
+      data:
+        allowed:
+        - GET
+        msg: POST is not an allowed method.
+      status:
+        code: 405
+        type: ERROR

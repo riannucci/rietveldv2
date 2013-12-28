@@ -69,6 +69,7 @@ POLL_IVAL = 0.1
 
 def TestRunner(diediedie, training, test_queue, result_queue):
   cov = coverage.coverage(config_file=os.environ['COVERAGE_PROCESS_START'])
+  cov._warn_no_data = False  # pylint: disable=W0212
   cov.start()
   try:
     while not diediedie.is_set():
@@ -147,7 +148,9 @@ def run_all_tests():
     test_queue = multiprocessing.JoinableQueue()
     result_queue = multiprocessing.JoinableQueue()
     procs = [multiprocessing.Process(
-        target=TestRunner, args=(diediedie, train, test_queue, result_queue))]
+        target=TestRunner, args=(diediedie, train, test_queue, result_queue))
+      for _ in xrange(multiprocessing.cpu_count())
+    ]
     processor = multiprocessing.Process(target=TestResultProcessor,
                                         args=(diediedie, result_queue,))
 

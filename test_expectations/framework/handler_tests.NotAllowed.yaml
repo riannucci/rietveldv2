@@ -1,0 +1,5 @@
+data:
+  allowed:
+  - GET
+  - PUT
+exeption: NotAllowed('POST is not an allowed method.',)
