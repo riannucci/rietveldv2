@@ -18,7 +18,6 @@
 from django.conf.urls.defaults import *
 
 from framework import rest_handler
-from codereviewv2 import auth_api, issue_api
-from cas import api
+from codereviewv2 import auth_api, issue_api, cas_api
 
 urlpatterns = rest_handler.generate_urlpatterns_for_all()

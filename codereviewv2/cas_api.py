@@ -18,11 +18,13 @@ from google.appengine.ext import ndb
 
 from framework import rest_handler, utils
 
-from . import models, common
+from cas import models
+
+from . import common
 
 
 class Entries(rest_handler.RESTCollectionHandler):
-  PREFIX = common.API_PREFIX
+  PREFIX = common.CAS_API_PREFIX
   ID_TYPE = str
   ID_TYPE_TOKEN = models.CAS_ID.REGEX.pattern
   MODEL_NAME = 'CASEntry'
