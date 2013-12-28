@@ -139,7 +139,7 @@ class HttpTestApi(object):
     del self._session.cookies['dev_appserver_login']
 
   def comment(self, comment):
-    self.state.append({'comment': comment})
+    self.state[-1]['response'].setdefault('comments', []).append(comment)
 
   METHODS = ('POST', 'GET', 'DELETE', 'HEAD', 'OPTIONS')
   def __getattr__(self, attr):

@@ -1,6 +1,8 @@
 - request: POST 'codereview/api/v2/accounts/me'
   response:
     code: 405
+    comments:
+    - 'Allow: "GET"'
     json:
       data:
         allowed:
@@ -12,6 +14,8 @@
 - request: POST 'codereview/api/v2/accounts/test@example.com'
   response:
     code: 405
+    comments:
+    - 'Allow: "GET"'
     json:
       data:
         allowed:

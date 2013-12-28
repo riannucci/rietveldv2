@@ -13,5 +13,7 @@
 # limitations under the License.
 
 def Execute(api):
-  api.POST('accounts/me')
-  api.POST('accounts/test@example.com')
+  r = api.POST('accounts/me')
+  api.comment('Allow: "%s"' % r.response.headers['Allow'])
+  r = api.POST('accounts/test@example.com')
+  api.comment('Allow: "%s"' % r.response.headers['Allow'])
