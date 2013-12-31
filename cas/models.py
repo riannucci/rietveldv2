@@ -226,10 +226,12 @@ class CAS_ID(object):
   def key(self):
     return ndb.Key(CASEntry, str(self))
 
-  def to_dict(self):
+  def to_dict(self, exclude=()):
     r = {'csum': self.csum, 'size': self.size, 'data_type': self.data_type}
     if self.charset:
       r['charset'] = self.charset
+    for key in exclude:
+      r.pop(key, None)
     return r
 
   def __str__(self):

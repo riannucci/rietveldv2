@@ -37,7 +37,7 @@ class CASEntries(rest_handler.RESTCollectionHandler):
   PROCESS_REQUEST = lambda self, req: req
   SPECIAL_ROUTES = {'lookup': 'lookup'}
 
-  MAX_BUFFER_SIZE = 5 * 1024 * 1024
+  MAX_BUFFER_SIZE = 50 * 1024
 
   # TODO(iannucci): Implement getters? This requires CAS to know about
   # application-level ACLs per CAS entry.
@@ -56,7 +56,7 @@ class CASEntries(rest_handler.RESTCollectionHandler):
     #      'charset': <charset>,  # optional
     #    }
     #  }
-    ret = []
+    ret = {}
     outstanding_futures = utils.IdentitySet()
     buffer_size = 0
 
@@ -78,7 +78,7 @@ class CASEntries(rest_handler.RESTCollectionHandler):
         cas_id = f.get_result().cas_id
         buffer_size -= cas_id.size
         outstanding_futures.remove(f)
-        ret.append(cas_id.to_dict())
+        ret[cas_id.csum] = cas_id.to_dict(exclude=['csum'])
 
       buffer_size += size
 
@@ -92,7 +92,8 @@ class CASEntries(rest_handler.RESTCollectionHandler):
 
     while outstanding_futures:
       f = ndb.Future.wait_any(outstanding_futures)
-      ret.append(f.get_result().cas_id.to_dict())
+      cas_id = f.get_result().cas_id
+      ret[cas_id.csum] = cas_id.to_dict(exclude=['csum'])
       outstanding_futures.remove(f)
 
     return utils.completed_future(ret)

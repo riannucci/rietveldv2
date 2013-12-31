@@ -47,10 +47,10 @@
     code: 200
     json:
       data:
-      - charset: utf-8
-        csum: d19fa3cd84e9f738dad86264cb606b28626700dcb5cc7bd300eb990e5757ecff
-        data_type: text/plain
-        size: 29
+        d19fa3cd84e9f738dad86264cb606b28626700dcb5cc7bd300eb990e5757ecff:
+          charset: utf-8
+          data_type: text/plain
+          size: 29
       status:
         code: 200
         type: OK
