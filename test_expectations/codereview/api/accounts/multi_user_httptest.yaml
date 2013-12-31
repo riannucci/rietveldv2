@@ -50,13 +50,14 @@
     raw: []
 - request: GET 'codereview/api/v2/accounts/test@example.com'
   response:
-    code: 500
+    code: 302
     json:
       data:
-        msg: __init__() takes exactly 2 arguments (1 given)
+        location: /_ah/login?continue=http%3A//SERVER%3APORT/codereview/api/v2/accounts/test%2540example.com
+        msg: Needs login.
       status:
-        code: 500
-        type: SERVER_ERROR
+        code: 302
+        type: REDIRECT
 - request: GET '_ah/login?action=Login&admin=True&email=bob%40VictoryLane.co.uk'
   response:
     code: 302

@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import codecs
 import functools
+import io
 import json
+import mimetools
 import os
 import random
 import re
@@ -106,17 +109,57 @@ class HttpTestApi(object):
   def request(self, method, resource, **kwargs):
     resource_prefix = kwargs.pop('resource_prefix', self.resource_prefix)
 
-    j = kwargs.pop('json', None)
-    if j is not None:
-      assert isinstance(j, dict)
-      assert 'data' not in kwargs and 'files' not in kwargs
-      kwargs['data'] = json.dumps(j)
+    # Make sure we only have one of the keys which results in body data.
+    has = lambda key: int(key in kwargs)
+    assert sum(map(has, ['data', 'files', 'json', 'ex_files'])) <= 1
 
     k = self.auto_kwargs.copy()
     k.setdefault('allow_redirects', False)
     k.update(kwargs)
     k.setdefault('headers', {})['X-Mock-Time'] = repr(self._timeval)
+    xsrf = k.pop('xsrf', None)
+    if xsrf:
+      k['headers']['X-XSRF-Token'] = xsrf
     self.add_time()
+
+    j = k.pop('json', None)
+    if j is not None:
+      assert isinstance(j, dict)
+      k['data'] = json.dumps(j)
+
+    ex_files = k.pop('ex_files', None)
+    if ex_files is not None:
+      # filename -> (data, mimetype, charset)
+      body = io.BytesIO()
+      utf_writer = codecs.lookup('utf-8')[3]
+      b64_writer = codecs.lookup('base64')[3]
+      boundary = mimetools.choose_boundary()
+      for filename, data_and_type in ex_files.iteritems():
+        body.write('--%s\r\n' % boundary)
+        if len(data_and_type) == 2:
+          data, mimetype = data_and_type
+          charset = None
+        elif len(data_and_type) == 3:
+          data, mimetype, charset = data_and_type
+          mimetype = '%s; charset="%s"' % (mimetype, charset)
+        else:
+          assert False, 'Do not understand %r' % data_and_type
+
+        utf_writer(body).write(
+          (
+            'Content-Disposition: form-data; name="%s"; filename="%s"\r\n'
+            'Content-Type: %s\r\n'
+            'Content-Transfer-Encoding: base64\r\n'
+            '\r\n'
+          ) %
+          (filename, filename, mimetype)
+        )
+        b64_writer(body).write(data)
+        body.write('\r\n')
+      body.write('--%s--\r\n' % boundary)
+      k['headers']['content-type'] = (
+        'multipart/form-data; boundary=%s' % boundary)
+      k['data'] = body.getvalue()
 
     uri = '/'.join(filter(bool, (self._base_url, resource_prefix, resource)))
     r = self._session.request(method, uri, **k)
@@ -141,7 +184,7 @@ class HttpTestApi(object):
   def comment(self, comment):
     self.state[-1]['response'].setdefault('comments', []).append(comment)
 
-  METHODS = ('POST', 'GET', 'DELETE', 'HEAD', 'OPTIONS')
+  METHODS = ('POST', 'PUT', 'GET', 'DELETE', 'HEAD', 'OPTIONS')
   def __getattr__(self, attr):
     if attr in self.METHODS:
       return functools.partial(self.request, attr)

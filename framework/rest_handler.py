@@ -22,8 +22,9 @@ import types
 from google.appengine.ext import ndb
 
 from django.conf.urls.defaults import url
+from django.http import HttpResponse
 
-from . import xsrf, handler, middleware, query_parser, exceptions
+from . import xsrf, handler, middleware, query_parser, exceptions, account
 
 
 class QueryableCollectionMixin(object):
@@ -88,8 +89,18 @@ def skip_xsrf(func):
   return func
 
 
-def check_xsrf(func):
+def check_xsrf(func):  # Default for non-GET
   func.check_xsrf = True
+  return func
+
+
+def allow_anonymous(func):
+  func.allow_anonymous = True
+  return func
+
+
+def forbid_anonymous(func):  # Default
+  func.allow_anonymous = False
   return func
 
 
@@ -120,7 +131,7 @@ class RESTCollectionHandler(object):
   PREFIX = ''
   SPECIAL_ROUTES = {}
   MIDDLEWARE = ()
-  PROCESS_REQUEST = None
+  PROCESS_REQUEST = lambda self, req: default_process_request(req)
 
   # e.g. post_async, get_cool_hat_async
   # We reserve OPTIONS to implement automatic explorable API endpoint.
@@ -204,22 +215,33 @@ class RESTCollectionHandler(object):
             def handler_method(request, *args, **kwargs):
               assert not kwargs  # would be from django's url router, but we're
                               # usurping kwargs for processed request data
+              if (not getattr(func, 'allow_anonymous', False) and
+                  not account.get_current_user()):
+                raise exceptions.NeedsLogin()
+
               if getattr(func, 'check_xsrf', (method_name != 'get')):
                 xsrf.assert_xsrf()
 
-              data = (cls.PROCESS_REQUEST or default_process_request)(request)
+              data = inst.PROCESS_REQUEST(request)  # pylint: disable=E1120
               if isinstance(data, dict):
                 r = func(inst, *args, **data).get_result()
               else:
                 r = func(inst, *(args + (data,))).get_result()
-              if isinstance(r, dict):
+
+              status = None
+              headers = None
+              if isinstance(r, HttpResponse):
+                return r
+              elif isinstance(r, dict):
                 status = r.pop(middleware.STATUS_CODE, None)
                 headers = r.pop(middleware.HEADERS, None)
-                r = {'data': r}
-                if status:
-                  r[middleware.STATUS_CODE] = status
-                if headers:
-                  r[middleware.HEADERS] = headers
+                if len(r) == 1 and 'data' in r:
+                  r = r['data']
+              r = {'data': r}
+              if status:
+                r[middleware.STATUS_CODE] = status
+              if headers:
+                r[middleware.HEADERS] = headers
               return r
             return handler_method
           methods[method_name] = closure(method_name, func)

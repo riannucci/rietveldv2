@@ -17,18 +17,20 @@
 from google.appengine.ext import ndb
 
 from framework import rest_handler, utils
+from framework.monkeypatch import fix_django_transfer_encoding   # pylint: disable=W0611
 
 from cas import models
 
 from . import common
 
 
-class Entries(rest_handler.RESTCollectionHandler):
-  PREFIX = common.CAS_API_PREFIX
+class CASEntries(rest_handler.RESTCollectionHandler):
+  PREFIX = common.API_PREFIX
   ID_TYPE = str
   ID_TYPE_TOKEN = models.CAS_ID.REGEX.pattern
+  COLLECTION_NAME = 'cas_entries'
   MODEL_NAME = 'CASEntry'
-  PROCESS_REQUEST = lambda r: r
+  PROCESS_REQUEST = lambda self, req: req
   SPECIAL_ROUTES = {'lookup': 'lookup'}
 
   MAX_BUFFER_SIZE = 5 * 1024 * 1024
@@ -47,25 +49,45 @@ class Entries(rest_handler.RESTCollectionHandler):
     #  the 'name' of that formdata file is the expected checksum
     #  the Content-Size of the file must be set correctly
     #  the Content-Type of the file must be set correctly
+    ret = []
     outstanding_futures = utils.IdentitySet()
     buffer_size = 0
+
+    # Trick Django into processing the request as a multipart post.
+    request.method = 'POST'
+    request._load_post_and_files()  # pylint: disable=W0212
+
     for csum, uploadfile in request.FILES.iteritems():
       while (buffer_size + uploadfile.size) >= self.MAX_BUFFER_SIZE:
         if not outstanding_futures:
           break  # current file is huge!
         f = ndb.Future.wait_any(outstanding_futures)
-        buffer_size -= f.get_result().cas_id.size
+        cas_id = f.get_result().cas_id
+        buffer_size -= cas_id.size
         outstanding_futures.remove(f)
+        ret.append(cas_id.to_dict())
 
-      assert uploadfile.name == ''
+      assert uploadfile.name in ('', csum)
       buffer_size += uploadfile.size
-      cas_id = models.CAS_ID(
-        csum.decode('hex'), uploadfile.size,
-        "%s; %s" % (uploadfile.content_type, uploadfile.charset))
+
+      data_type = uploadfile.content_type.lower()
+      charset = None
+      if data_type.startswith('text/'):
+        charset = uploadfile.charset.lower() if uploadfile.charset else 'ascii'
+      assert charset in (None, 'utf-8', 'ascii')
+      cas_id = models.CAS_ID(csum.decode('hex'), uploadfile.size, data_type,
+                             uploadfile.charset)
       outstanding_futures.add(cas_id.create_async(uploadfile.read()))
 
-    return utils.NONE_FUTURE
+    while outstanding_futures:
+      f = ndb.Future.wait_any(outstanding_futures)
+      ret.append(f.get_result().cas_id.to_dict())
+      outstanding_futures.remove(f)
 
+    return utils.completed_future(ret)
+
+  @ndb.tasklet
   def post_one_async(self, key, request):
-    return models.CAS_ID.fromkey(key).create_async(request.read())
+    ent = yield models.CAS_ID.fromkey(key).create_async(request.read())
+    raise ndb.Return(ent.to_dict())
 

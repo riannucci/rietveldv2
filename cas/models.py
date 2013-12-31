@@ -20,8 +20,8 @@ import logging
 
 from google.appengine.ext import ndb
 
-from . import exceptions as cas_exceptions
 from . import types
+from . import exceptions as cas_exceptions
 
 from framework import utils, exceptions
 
@@ -38,11 +38,12 @@ class CASData(ndb.Model):
   def data_async(self):
     raise NotImplementedError()
 
-  @classmethod
-  def keys(cls, parent):
+  @staticmethod
+  def keys(parent):
+    # TODO(iannucci): support second-order subclasses
     parent = parent.pairs()
     ret = []
-    for klazz in cls.__subclasses__():
+    for klazz in CASData.__subclasses__():
       # pylint: disable=W0212
       ret.append(ndb.Key(pairs=parent + [(klazz._get_kind(), 1)]))
     return ret
@@ -65,17 +66,18 @@ class CASEntry(ndb.Model):
 
   @utils.cached_property
   def cas_id(self):  # pylint: disable=E0202
-    return CAS_ID.fromkey(self.key())
+    return CAS_ID.from_key(self.key)
 
 
 class CAS_ID(object):
   # TODO/PERF(iannucci): Is hashlib the fastest on appengine? PyCrypto?
   HASH_ALGO = hashlib.sha256
   CSUM_SIZE = HASH_ALGO().digest_size
-  REGEX = re.compile(r'[0-9a-fA-F]{%s}:\d+:.*' % (CSUM_SIZE * 2))
+  REGEX = re.compile(
+    r'([0-9a-fA-F]{%s}):(\d+):([^:]*)(?::(.*))?' % (CSUM_SIZE * 2))
 
   #### Constructors
-  def __init__(self, csum, size, data_type):
+  def __init__(self, csum, size, data_type, charset):
     assert csum and size and data_type
 
     assert len(csum) == self.CSUM_SIZE
@@ -85,25 +87,33 @@ class CAS_ID(object):
     self.size = size
 
     assert isinstance(data_type, basestring)
-    self.data_type = data_type
+    self.data_type = data_type.lower()
+
+    assert isinstance(charset, (basestring, type(None)))
+    self.charset = charset.lower() if charset else None
 
   @classmethod
-  def fromstring(cls, string_id):
-    assert cls.REGEX.match(string_id)
-    csum, size, data_type = string_id.split(':', 2)
-    csum = csum.decode('hex')
-    size = int(size)
-    return cls(csum, size, data_type)
+  def from_string(cls, string_id):
+    match = cls.REGEX.match(string_id)
+    assert match is not None
+    csum = match.group(1).decode('hex')
+    size = int(match.group(2))
+    data_type = match.group(3)
+    charset = match.group(4)
+    return cls(csum, size, data_type, charset)
 
   @classmethod
-  def fromkey(cls, key):
+  def from_key(cls, key):
     assert key.kind() == 'CASEntry'
-    return cls.fromstring(key.id())
+    return cls.from_string(key.id())
 
   @classmethod
-  def fromdict(cls, dct):
+  def from_dict(cls, dct):
     try:
-      return cls(dct['csum'].decode('hex'), dct['size'], dct['data_type'])
+      csum, size, data_type = (dct['csum'].decode('hex'), dct['size'],
+                               dct['data_type'])
+      charset = dct.get('charset')
+      return cls(csum, size, data_type, charset)
     except Exception:
       raise exceptions.BadData('Malformed CAS ID: %r' % dct)
 
@@ -174,16 +184,20 @@ class CAS_ID(object):
     csum = self.HASH_ALGO(data)
     csum.update(str(len(data)))
     csum.update(self.data_type)
+    if self.charset:
+      csum.update(self.charset)
+    csum = csum.hexdigest()
     if csum != self.csum:
+      logging.warn('Checksum mismatch: %r v %r', csum, self.csum)
       raise cas_exceptions.CASValidationError('Checksum mismatch')
 
     if type_map is None:
       from . import default_data_types
       type_map = default_data_types.TYPE_MAP
     assert isinstance(type_map, types.CASTypeRegistry)
-    if self.data_type not in type_map:
-      raise cas_exceptions.CASUnknownDataType(type_map, self.data_type)
-    return type_map[self.data_type](data, check_refs=check_refs)
+
+    return type_map.validate_async(data, self.data_type, self.charset,
+                                   check_refs)
 
   @classmethod
   @ndb.tasklet
@@ -211,25 +225,32 @@ class CAS_ID(object):
     return ndb.Key(CASEntry, str(self))
 
   def to_dict(self):
-    return {'csum': self.csum.encode('hex'), 'size': self.size,
-            'data_type': self.data_type}
+    r = {'csum': self.csum, 'size': self.size, 'data_type': self.data_type}
+    if self.charset:
+      r['charset'] = self.charset
+    return r
 
   def __str__(self):
-    return "%(csum)s:%(size)s:%(data_type)s" % self.__dict__
+    fmt = "%(csum)s:%(size)s:%(data_type)s"
+    if self.charset:
+      fmt += ':%(charset)s'
+    return fmt % self.to_dict()
 
 
 class CAS_IDProperty(ndb.KeyProperty):
   # Pylint thinks this is an old-style class, but it's not really.
   # pylint: disable=E1002
-  def __init__(self, data_type, *args, **kwargs):
+  def __init__(self, data_type, charset=None, *args, **kwargs):
     kwargs['kind'] = CASEntry
     super(CAS_IDProperty, self).__init__(*args, **kwargs)
     self.data_type = data_type
+    self.charset = utils.make_set(charset)
 
   def _to_base_type(self, value):
     assert isinstance(value, CAS_ID)
     assert value.data_type == self.data_type
+    assert value.charset in self.charset
     return value.key
 
   def _from_base_type(self, value):
-    return CAS_ID.fromkey(value)
+    return CAS_ID.from_key(value)

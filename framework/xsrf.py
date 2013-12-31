@@ -25,7 +25,7 @@ from google.appengine.api import users
 
 from . import exceptions, account
 
-HEADER = 'X-Codereview-XSRF-Token'
+HEADER = 'HTTP_X_XSRF_TOKEN'
 
 class GlobalXSRFSecret(ndb.Model):
   data = ndb.BlobProperty()
@@ -72,33 +72,33 @@ def _generate_token(stamp):
 def assert_xsrf():
   request_xsrf = os.environ.get(HEADER, None)
   if request_xsrf is None:
-    raise exceptions.Forbidden('Request requires XSRF token.')
+    raise exceptions.Forbidden('make request without XSRF Token')
 
   try:
     request_xsrf = json.loads(base64.urlsafe_b64decode(request_xsrf))
   except:
     logging.exception('Died while trying to decode XSRF token: %s',
                       request_xsrf)
-    raise exceptions.Forbidden('Malformed XSRF token')
+    raise exceptions.Forbidden('make request with bad XSRF Token (malformed)')
 
   stamp, tag = request_xsrf.pop('stamp'), request_xsrf.pop('tag')
   if request_xsrf:
-    raise exceptions.Forbidden('Extra junk in XSRF header')
+    raise exceptions.Forbidden('make request with bad XSRF Token (extra junk)')
 
   if not isinstance(stamp, int):
-    raise exceptions.Forbidden('Malformed XSRF token')
+    raise exceptions.Forbidden('make request with bad XSRF Token (malformed)')
 
   try:
     tag = tag.decode('hex')
   except:
-    raise exceptions.Forbidden('Malformed XSRF token')
+    raise exceptions.Forbidden('make request with bad XSRF Token (malformed)')
 
   now = time.time()
   if now - stamp > (60 * 60):
-    raise exceptions.Forbidden('Expired XSRF token')
+    raise exceptions.Forbidden('make request with expired XSRF Token')
 
   if not _constant_time_equals(_generate_token(stamp), tag):
-    raise exceptions.Forbidden('Invalid XSRF token')
+    raise exceptions.Forbidden('make request with invalid XSRF Token')
 
 
 def make_header_token():

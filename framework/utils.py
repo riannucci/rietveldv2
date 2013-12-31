@@ -15,7 +15,9 @@
 import collections
 import functools
 import logging
+import os
 import traceback
+import urllib
 
 from google.appengine.ext import ndb
 
@@ -39,7 +41,7 @@ class IdentitySet(collections.MutableSet):
     return id(item) in self.data
 
   def __iter__(self):
-    return self.data.iterkeys()
+    return self.data.itervalues()
 
   def __len__(self):
     return len(self.data)
@@ -49,6 +51,39 @@ class IdentitySet(collections.MutableSet):
 
   def discard(self, item):
     del self.data[id(item)]
+
+
+def make_set(obj):
+  if not isinstance(obj, (list, tuple, set, frozenset)):
+    obj = (obj,)
+  return frozenset(obj)
+
+
+def wsgi_full_url():
+  """
+  Copied verbatim from:
+    http://www.python.org/dev/peps/pep-0333/#url-reconstruction
+  """
+  url = os.environ['wsgi.url_scheme']+'://'
+
+  if os.environ.get('HTTP_HOST'):
+    url += os.environ['HTTP_HOST']
+  else:
+    url += os.environ['SERVER_NAME']
+
+    if os.environ['wsgi.url_scheme'] == 'https':
+      if os.environ['SERVER_PORT'] != '443':
+        url += ':' + os.environ['SERVER_PORT']
+    else:
+      if os.environ['SERVER_PORT'] != '80':
+        url += ':' + os.environ['SERVER_PORT']
+
+  url += urllib.quote(os.environ.get('SCRIPT_NAME', ''))
+  url += urllib.quote(os.environ.get('PATH_INFO', ''))
+  if os.environ.get('QUERY_STRING'):
+    url += '?' + os.environ['QUERY_STRING']
+
+  return url
 
 
 class hybridmethod(object):

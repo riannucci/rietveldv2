@@ -33,8 +33,6 @@ class Accounts(rest_handler.RESTCollectionHandler):
       auth_models.current_account_async(),
       auth_models.Account.email_key(key.id()).get_async()
     ]
-    if me is None:
-      raise exceptions.NeedsLogin()
     if account is None:
       raise exceptions.NotFound("User '%s' does not exist" % key.id())
 
@@ -52,6 +50,4 @@ class Accounts(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get_me_async(self, _key):
     me = yield auth_models.current_account_async()
-    if me is None:
-      raise exceptions.NeedsLogin()
     raise ndb.Return(me.to_dict())

@@ -12,4 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import default_data_types, exceptions, models
+import hashlib
+
+DATA = 'I am the fluffiest of bunnies'
+MIMETYPE = 'text/plain'
+CHARSET = 'utf-8'
+
+def Execute(api):
+  csum = hashlib.sha256(DATA)
+  csum.update(str(len(DATA)))
+  csum.update(MIMETYPE)
+  csum.update(CHARSET)
+  ex_files = {csum.hexdigest(): (DATA, MIMETYPE, CHARSET)}
+
+  api.PUT('cas_entries', ex_files=ex_files)  # fails b/c logged out
+  api.login()
+  api.PUT('cas_entries', ex_files=ex_files)  # fails b/c no xsrf
+  me = api.GET('accounts/me').json
+  api.PUT('cas_entries', ex_files=ex_files, xsrf=me['data']['xsrf'])

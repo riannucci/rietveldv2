@@ -16,6 +16,8 @@
 
 from google.appengine.api import users
 
+from . import utils
+
 
 class FrameworkException(Exception):
   """Base class for all exceptions in framework."""
@@ -59,9 +61,9 @@ class NeedsLogin(FrameworkException):
   account in order to display."""
   STATUS_CODE = 302
 
-  def __init__(self, request):
+  def __init__(self):
     super(NeedsLogin, self).__init__('Needs login.')
     url = users.create_login_url(
-      request.get_full_path().encode('utf-8'))
+      utils.wsgi_full_url().encode('utf-8'))
     self.HEADERS = {'Location': url}
     self.DATA = {'location': url}

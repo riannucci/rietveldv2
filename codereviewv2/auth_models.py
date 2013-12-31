@@ -18,7 +18,7 @@ from google.appengine.ext import ndb
 
 from django.conf import settings
 
-from framework import xsrf, account
+from framework import xsrf, account, exceptions
 
 
 class AccountProperty(account.UserProperty):
@@ -128,9 +128,9 @@ class Account(ndb.Model):
     return ret
 
 
-def current_account_async():
-  return Account.current_async()
-
-
-def current_account():
-  return current_account_async().get_result()
+@ndb.tasklet
+def current_account_async(required=True):
+  ret = yield Account.current_async()
+  if required and not ret:
+    raise exceptions.NeedsLogin()
+  raise ndb.Return(ret)

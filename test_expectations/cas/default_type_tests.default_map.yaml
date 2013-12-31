@@ -1,0 +1,13 @@
+charset:
+  ascii: cas.default_data_types.charset_ascii
+  utf-8: cas.default_data_types.charset_utf8
+data:
+  application/json: cas.default_data_types.application_json
+  application/octet-stream: cas.default_data_types.application_octet_stream
+  application/patchset+json: codereviewv2.issue_models.patchset_json
+  application/xml: cas.default_data_types.application_xml
+  image/gif: cas.default_data_types.image_gif
+  image/jpeg: cas.default_data_types.image_jpeg
+  image/png: cas.default_data_types.image_png
+  image/svg+xml: cas.default_data_types.image_svg_xml
+  text/plain: cas.default_data_types.text_plain

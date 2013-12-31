@@ -20,6 +20,7 @@ from google.appengine.ext import ndb
 from google.appengine.ext.ndb import metadata
 
 import cas
+
 from framework import utils, mixins, exceptions, authed_model
 
 from . import auth_models, diff
@@ -47,7 +48,7 @@ class Content(diff.Diffable):
     path = content.pop('path')
     mode = content.pop('mode')
     timestamp = content.pop('timestamp')
-    data = cas.CAS_ID.fromdict(content.pop('data'))
+    data = cas.models.CAS_ID.fromdict(content.pop('data'))
     assert not content
     assert not self.PATH_RE.search(path)
     # TODO(iannucci): Support symlinks and gitlinks?
@@ -124,7 +125,7 @@ class PatchList(list):
     return ret
 
 
-@cas.DEFAULT_TYPE_MAP(PATCHSET_TYPE)
+@cas.default_data_types.TYPE_MAP(PATCHSET_TYPE)
 def patchset_json(data):
   """The json that a client will upload, containing links to other CASEntries.
 
@@ -142,7 +143,7 @@ def patchset_json(data):
     ]
   }
   """
-  parsed = cas.DEFAULT_TYPE_MAP['application/json'](data)
+  parsed = cas.default_data_types.TYPE_MAP['application/json'](data)
   assert ['patches'] == parsed.keys()
   assert parsed['patches']
   return PatchList(Patch.from_dict(i, p)

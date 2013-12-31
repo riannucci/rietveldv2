@@ -19,4 +19,3 @@ from . import auth_models
 account.ACCOUNT_MODEL = auth_models.Account
 
 API_PREFIX = 'codereview/api/v2'
-CAS_API_PREFIX = 'cas/api/v1'

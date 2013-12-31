@@ -18,12 +18,24 @@ class CASError(Exception):
 
 
 class CASValidationError(CASError):
-  pass
+  STATUS_CODE = 400
 
 
 class CASUnknownDataType(CASError):
+  STATUS_CODE = 400
+
   def __init__(self, type_map, data_type):
     self.type_map = type_map
     self.data_type = data_type
     super(CASUnknownDataType, self).__init__(
       "Unknown data_type: %s" % data_type)
+
+
+class CASUnknownCharset(CASError):
+  STATUS_CODE = 400
+
+  def __init__(self, type_map, charset):
+    self.type_map = type_map
+    self.charset = charset
+    super(CASUnknownCharset, self).__init__(
+      "Unknown charset: %s" % charset)
