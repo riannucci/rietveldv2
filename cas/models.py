@@ -126,6 +126,8 @@ class CAS_ID(object):
 
     It is an error to create() an existing CASEntry.
     """
+    assert isinstance(data, str)  # specifically want data to be raw bytes.
+
     if (yield self.key.get_async()) is not None:
       logging.error("Attempted to create('%s') which already exists" % self)
       raise exceptions.CASError("CASEntry('%s') already exists." % self)

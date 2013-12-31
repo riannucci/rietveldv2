@@ -1,0 +1,36 @@
+- request: GET '_ah/login?action=Login&admin=False&email=test%40example.com'
+  response:
+    code: 302
+    raw: []
+- request: GET 'codereview/api/v2/accounts/me'
+  response:
+    code: 200
+    json:
+      data:
+        created: '2013-12-27 02:24:06.703166'
+        default_column_width: 80
+        default_context: 10
+        email: test@example.com
+        fresh: true
+        lower_email: test@example.com
+        lower_nickname: test (689)
+        modified: '2013-12-27 02:24:06.703166'
+        nickname: test (689)
+        notify_by_chat: false
+        notify_by_email: true
+        user: test@example.com
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEwNDYsICJ0YWciOiAiYTYyZDEwODQ2NjA2M2JlOTYyYzE4NzYzNjRlMDNmYzlhYTMzZmEzZTQxMjFmYjc5NjEyODEyZGVkOTc0ZTdjYyJ9
+      status:
+        code: 200
+        type: OK
+- request: PUT 'codereview/api/v2/cas_entries'
+  response:
+    code: 200
+    json:
+      data:
+      - csum: bab6c9bbdbb47f82f67b04b5f1fcaab8ef2e300fd4e13a5fcff2db3e51e3ad52
+        data_type: application/octet-stream
+        size: 1024
+      status:
+        code: 200
+        type: OK

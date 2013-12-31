@@ -14,6 +14,10 @@
 
 """API for the Content Addressed Store"""
 
+import gzip
+import json
+from cStringIO import StringIO
+
 from google.appengine.ext import ndb
 
 from framework import rest_handler, utils
@@ -44,21 +48,30 @@ class CASEntries(rest_handler.RESTCollectionHandler):
     pass
 
   def put_async(self, _key, request):
-    # expect request body to be in the format of:
-    #  one formdata file entry per CASEntry
-    #  the 'name' of that formdata file is the expected checksum
-    #  the Content-Size of the file must be set correctly
-    #  the Content-Type of the file must be set correctly
+    # expect request body to be a json blob (optionally gzip'd):
+    #  {
+    #    'csum': {
+    #      'data': base64(file data),
+    #      'content_type': <content_type>,
+    #      'charset': <charset>,  # optional
+    #    }
+    #  }
     ret = []
     outstanding_futures = utils.IdentitySet()
     buffer_size = 0
 
-    # Trick Django into processing the request as a multipart post.
-    request.method = 'POST'
-    request._load_post_and_files()  # pylint: disable=W0212
+    fhandle = request
+    assert request.META['CONTENT_TYPE'] == 'application/json'
+    if request.META.get('HTTP_CONTENT_ENCODING', None) == 'gzip':
+      # request's file-like interface doesn't support tell()...
+      fhandle = gzip.GzipFile(fileobj=StringIO(fhandle.read()), mode='r')
 
-    for csum, uploadfile in request.FILES.iteritems():
-      while (buffer_size + uploadfile.size) >= self.MAX_BUFFER_SIZE:
+    for csum, data_and_metadata in json.load(fhandle).iteritems():
+      data = data_and_metadata['data'].decode('base64')
+      size = len(data)
+      content_type = data_and_metadata['content_type']
+
+      while (buffer_size + size) >= self.MAX_BUFFER_SIZE:
         if not outstanding_futures:
           break  # current file is huge!
         f = ndb.Future.wait_any(outstanding_futures)
@@ -67,17 +80,15 @@ class CASEntries(rest_handler.RESTCollectionHandler):
         outstanding_futures.remove(f)
         ret.append(cas_id.to_dict())
 
-      assert uploadfile.name in ('', csum)
-      buffer_size += uploadfile.size
+      buffer_size += size
 
-      data_type = uploadfile.content_type.lower()
       charset = None
-      if data_type.startswith('text/'):
-        charset = uploadfile.charset.lower() if uploadfile.charset else 'ascii'
+      if content_type.startswith('text/'):
+        charset = data_and_metadata.get('charset', 'ascii').lower()
       assert charset in (None, 'utf-8', 'ascii')
-      cas_id = models.CAS_ID(csum.decode('hex'), uploadfile.size, data_type,
-                             uploadfile.charset)
-      outstanding_futures.add(cas_id.create_async(uploadfile.read()))
+      cas_id = models.CAS_ID(csum.decode('hex'), size, content_type,
+                             charset)
+      outstanding_futures.add(cas_id.create_async(data))
 
     while outstanding_futures:
       f = ndb.Future.wait_any(outstanding_futures)

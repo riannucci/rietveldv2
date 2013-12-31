@@ -27,8 +27,7 @@ def Execute(api):
                                  'content_type': MIMETYPE,
                                  'charset': CHARSET}}
 
-  api.PUT('cas_entries', json=ex_files)  # fails b/c logged out
   api.login()
-  api.PUT('cas_entries', json=ex_files)  # fails b/c no xsrf
   me = api.GET('accounts/me').json
-  api.PUT('cas_entries', json=ex_files, xsrf=me['data']['xsrf'])
+  api.PUT('cas_entries', json=ex_files, xsrf=me['data']['xsrf'],
+          compress=True)

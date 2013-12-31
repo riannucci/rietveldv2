@@ -111,9 +111,10 @@ class CASTypeRegistry(dict):
       raise exceptions.CASUnknownDataType(self, data_type)
     data_type_async = self[self.DATA, data_type]
 
-    if charset and (self.CHARSET, charset) not in self:
-      raise exceptions.CASUnknownCharset(self, charset)
-    charset_async = self[self.CHARSET, charset]
+    if charset:
+      if (self.CHARSET, charset) not in self:
+        raise exceptions.CASUnknownCharset(self, charset)
+      charset_async = self[self.CHARSET, charset]
 
     required_charsets = data_type_async.required_charsets
     if (required_charsets and charset not in required_charsets):

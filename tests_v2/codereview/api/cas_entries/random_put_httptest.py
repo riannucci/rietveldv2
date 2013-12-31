@@ -13,22 +13,20 @@
 # limitations under the License.
 
 import hashlib
+import random
 
-DATA = 'I am the fluffiest of bunnies'
-MIMETYPE = 'text/plain'
-CHARSET = 'utf-8'
+R = random.Random(1337)
+DATA = ''.join(chr(R.randint(0, 255)) for _ in xrange(1024))
+MIMETYPE = 'application/octet-stream'
 
 def Execute(api):
   csum = hashlib.sha256(DATA)
   csum.update(str(len(DATA)))
   csum.update(MIMETYPE)
-  csum.update(CHARSET)
   ex_files = {csum.hexdigest(): {'data': DATA.encode('base64'),
-                                 'content_type': MIMETYPE,
-                                 'charset': CHARSET}}
+                                 'content_type': MIMETYPE}}
 
-  api.PUT('cas_entries', json=ex_files)  # fails b/c logged out
   api.login()
-  api.PUT('cas_entries', json=ex_files)  # fails b/c no xsrf
   me = api.GET('accounts/me').json
-  api.PUT('cas_entries', json=ex_files, xsrf=me['data']['xsrf'])
+  api.PUT('cas_entries', json=ex_files, xsrf=me['data']['xsrf'],
+          compress=True)
