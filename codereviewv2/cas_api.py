@@ -27,7 +27,7 @@ from . import common
 class CASEntries(rest_handler.RESTCollectionHandler):
   PREFIX = common.API_PREFIX
   ID_TYPE = str
-  ID_TYPE_TOKEN = models.CAS_ID.REGEX.pattern
+  ID_TYPE_TOKEN = models.CAS_ID.NON_CAPTURE_REGEX
   COLLECTION_NAME = 'cas_entries'
   MODEL_NAME = 'CASEntry'
   SPECIAL_ROUTES = {'lookup': 'lookup'}
@@ -91,6 +91,6 @@ class CASEntries(rest_handler.RESTCollectionHandler):
   @rest_handler.skip_process_request
   @ndb.tasklet
   def post_one_async(self, key, request):
-    ent = yield models.CAS_ID.fromkey(key).create_async(request.read())
-    raise ndb.Return(ent.to_dict())
+    ent = yield models.CAS_ID.from_key(key).create_async(request.read())
+    raise ndb.Return(ent.cas_id.to_dict())
 

@@ -75,6 +75,7 @@ class CAS_ID(object):
   CSUM_SIZE = HASH_ALGO().digest_size
   REGEX = re.compile(
     r'([0-9a-fA-F]{%s}):(\d+):([^:]*)(?::(.*))?' % (CSUM_SIZE * 2))
+  NON_CAPTURE_REGEX = re.sub(r'\(([^?])', r'(?:\1', REGEX.pattern)
 
   #### Constructors
   def __init__(self, csum, size, data_type, charset):

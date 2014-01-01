@@ -22,4 +22,4 @@ urls:
 - <RegexURLPattern api_messages_one ^codereview/api/v2/issues/(\d+)/messages/(\d+)$>
 - <RegexURLPattern api_cas_entries ^codereview/api/v2/cas_entries$>
 - <RegexURLPattern api_cas_entries_lookup ^codereview/api/v2/cas_entries/lookup$>
-- <RegexURLPattern api_cas_entries_one ^codereview/api/v2/cas_entries/(([0-9a-fA-F]{64}):(\d+):([^:]*)(?::(.*))?)$>
+- <RegexURLPattern api_cas_entries_one ^codereview/api/v2/cas_entries/((?:[0-9a-fA-F]{64}):(?:\d+):(?:[^:]*)(?::(?:.*))?)$>
