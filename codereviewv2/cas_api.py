@@ -14,10 +14,6 @@
 
 """API for the Content Addressed Store"""
 
-import gzip
-import json
-from cStringIO import StringIO
-
 from google.appengine.ext import ndb
 
 from framework import rest_handler, utils
@@ -34,7 +30,6 @@ class CASEntries(rest_handler.RESTCollectionHandler):
   ID_TYPE_TOKEN = models.CAS_ID.REGEX.pattern
   COLLECTION_NAME = 'cas_entries'
   MODEL_NAME = 'CASEntry'
-  PROCESS_REQUEST = lambda self, req: req
   SPECIAL_ROUTES = {'lookup': 'lookup'}
 
   MAX_BUFFER_SIZE = 50 * 1024
@@ -47,8 +42,8 @@ class CASEntries(rest_handler.RESTCollectionHandler):
   def get_lookup_async(self):
     pass
 
-  def put_async(self, _key, request):
-    # expect request body to be a json blob (optionally gzip'd):
+  def put_async(self, _key, **all_data):
+    # expect request body to be a json blob:
     #  {
     #    'csum': {
     #      'data': base64(file data),
@@ -60,14 +55,9 @@ class CASEntries(rest_handler.RESTCollectionHandler):
     outstanding_futures = utils.IdentitySet()
     buffer_size = 0
 
-    fhandle = request
-    assert request.META['CONTENT_TYPE'] == 'application/json'
-    if request.META.get('HTTP_CONTENT_ENCODING', None) == 'gzip':
-      # request's file-like interface doesn't support tell()...
-      fhandle = gzip.GzipFile(fileobj=StringIO(fhandle.read()), mode='r')
-
-    for csum, data_and_metadata in json.load(fhandle).iteritems():
-      data = data_and_metadata['data'].decode('base64')
+    while all_data:
+      csum, data_and_metadata = all_data.popitem()
+      data = data_and_metadata.pop('data').decode('base64')
       size = len(data)
       content_type = data_and_metadata['content_type']
 
@@ -98,6 +88,7 @@ class CASEntries(rest_handler.RESTCollectionHandler):
 
     return utils.completed_future(ret)
 
+  @rest_handler.skip_process_request
   @ndb.tasklet
   def post_one_async(self, key, request):
     ent = yield models.CAS_ID.fromkey(key).create_async(request.read())

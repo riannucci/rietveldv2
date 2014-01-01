@@ -14,10 +14,13 @@
 
 import collections
 import functools
+import gzip
 import json
 import logging
 import re
 import types
+
+from cStringIO import StringIO
 
 from google.appengine.ext import ndb
 
@@ -104,22 +107,48 @@ def forbid_anonymous(func):  # Default
   return func
 
 
-def default_process_request(request):
-  # TODO(iannucci):  Check mimetype?
-  ret = None
-  # TODO(iannucci): see if we can do this without reading it all into memory?
-  body = request.read()
+def process_json_request(request):
+  mimetype = 'application/json'
+  assert request.META.get('CONTENT_TYPE', mimetype) == mimetype
+
+  fhandle = request
+  if request.META.get('HTTP_CONTENT_ENCODING', None) == 'gzip':
+    # request's file-like interface doesn't support tell()...
+    fhandle = gzip.GzipFile(fileobj=StringIO(fhandle.read()), mode='r')
+
+  # TODO(iannucci): Support streaming data types so we don't have to have
+  # everything in memory all at once.
+  # Maybe use a streaming JSON library of some sort?
+  body = fhandle.read()
   if len(body) == 0:
     return {}
-  else:
-    try:
-      ret = json.loads(body)
-    except:
-      logging.exception('Bad JSON request body')
+
+  ret = None
+  try:
+    ret = json.loads(body)
+  except:
+    logging.exception('Bad JSON request body')
 
   if not ret or not isinstance(ret, dict):
     raise exceptions.BadData('Expected JSON object in request body')
   return ret
+
+
+def json_process_request(func):  # Default
+  func.process_request = process_json_request
+  return func
+
+
+def skip_process_request(func):
+  func.process_request = lambda req: req
+  return func
+
+
+def custom_process_request(processor_func):
+  def decorator(func):
+    func.process_request = processor_func
+    return func
+  return decorator
 
 
 class RESTCollectionHandler(object):
@@ -131,7 +160,6 @@ class RESTCollectionHandler(object):
   PREFIX = ''
   SPECIAL_ROUTES = {}
   MIDDLEWARE = ()
-  PROCESS_REQUEST = lambda self, req: default_process_request(req)
 
   # e.g. post_async, get_cool_hat_async
   # We reserve OPTIONS to implement automatic explorable API endpoint.
@@ -222,7 +250,8 @@ class RESTCollectionHandler(object):
               if getattr(func, 'check_xsrf', (method_name != 'get')):
                 xsrf.assert_xsrf()
 
-              data = inst.PROCESS_REQUEST(request)  # pylint: disable=E1120
+              processor = getattr(func, 'process_request', process_json_request)
+              data = processor(request)
               if isinstance(data, dict):
                 r = func(inst, *args, **data).get_result()
               else:

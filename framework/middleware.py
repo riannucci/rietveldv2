@@ -146,7 +146,7 @@ class JSONResponseMiddleware(Middleware):
       else:
         logging.warn('JSON response code unknown? %s', result)
       result['status'] = {'type': status, 'code': code}
-    result = json.dumps(result, separators=(',',':'), sort_keys=True,
+    result = json.dumps(result, separators=(',',':'),
                         default=self._json_default)
     ret = HttpResponse(result, content_type='application/json; charset=utf-8',
                        status=code)
