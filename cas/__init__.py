@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import default_data_types, exceptions, models
+from . import default_content_types, exceptions, models

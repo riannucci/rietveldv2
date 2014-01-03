@@ -12,18 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
-import re
 import hashlib
-import itertools
+import hmac
 import logging
+import os
+import re
 
 from google.appengine.ext import ndb
 
 from . import types
 from . import exceptions as cas_exceptions
 
-from framework import utils, exceptions
+from framework import utils, exceptions, xsrf
 
 
 class CASData(ndb.Model):
@@ -64,9 +64,22 @@ class CASDataInline(CASData):
 class CASEntry(ndb.Model):
   generation = ndb.IntegerProperty(default=0)
 
+  salt = ndb.BlobProperty()
+  salt_hash = ndb.BlobProperty()
+
   @utils.cached_property
   def cas_id(self):  # pylint: disable=E0202
     return CAS_ID.from_key(self.key)
+
+  def prove_ownership(self, proof):
+    # TODO(iannucci): Make async
+    expected = hmac.new(xsrf.assert_xsrf(), self.salt_hash).digest()
+    return utils.constant_time_equals(proof, expected)
+
+  def to_dict(self, exclude=()):
+    ret = self.cas_id.to_dict(exclude)
+    ret['salt'] = self.salt.encode('base64')[:-1]  # skip trailing newline
+    return ret
 
 
 class CAS_ID(object):
@@ -78,8 +91,8 @@ class CAS_ID(object):
   NON_CAPTURE_REGEX = re.sub(r'\(([^?])', r'(?:\1', REGEX.pattern)
 
   #### Constructors
-  def __init__(self, csum, size, data_type, charset):
-    assert csum and size and data_type
+  def __init__(self, csum, size, content_type, charset):
+    assert csum and size and content_type
 
     assert len(csum) == self.CSUM_SIZE
     self.csum = csum.encode('hex')
@@ -87,8 +100,8 @@ class CAS_ID(object):
     assert isinstance(size, int)
     self.size = size
 
-    assert isinstance(data_type, basestring)
-    self.data_type = data_type.lower()
+    assert isinstance(content_type, basestring)
+    self.content_type = content_type.lower()
 
     assert isinstance(charset, (basestring, type(None)))
     self.charset = charset.lower() if charset else None
@@ -99,9 +112,9 @@ class CAS_ID(object):
     assert match is not None
     csum = match.group(1).decode('hex')
     size = int(match.group(2))
-    data_type = match.group(3)
+    content_type = match.group(3)
     charset = match.group(4)
-    return cls(csum, size, data_type, charset)
+    return cls(csum, size, content_type, charset)
 
   @classmethod
   def from_key(cls, key):
@@ -111,10 +124,10 @@ class CAS_ID(object):
   @classmethod
   def from_dict(cls, dct):
     try:
-      csum, size, data_type = (dct['csum'].decode('hex'), dct['size'],
-                               dct['data_type'])
+      csum, size, content_type = (
+        dct['csum'].decode('hex'), dct['size'], dct['content_type'])
       charset = dct.get('charset')
-      return cls(csum, size, data_type, charset)
+      return cls(csum, size, content_type, charset)
     except Exception:
       raise exceptions.BadData('Malformed CAS ID: %r' % dct)
 
@@ -138,7 +151,11 @@ class CAS_ID(object):
     # a CASEntry when it's ripe.
     yield self.verify_async(data, type_map)
 
-    entry = CASEntry(key=self.key)
+    # TODO(iannucci): async version of hmac/checksum
+    salt = os.urandom(32)
+    salt_hash = hmac.new(salt, data, hashlib.sha256)
+
+    entry = CASEntry(key=self.key, salt=salt, salt_hash=salt_hash.digest())
 
     yield [
       entry.put_async(),
@@ -186,7 +203,7 @@ class CAS_ID(object):
     # TODO(iannucci): Verify hash in parallel?
     csum = self.HASH_ALGO(data)
     csum.update(str(len(data)))
-    csum.update(self.data_type)
+    csum.update(self.content_type)
     if self.charset:
       csum.update(self.charset)
     csum = csum.hexdigest()
@@ -195,32 +212,12 @@ class CAS_ID(object):
       raise cas_exceptions.CASValidationError('Checksum mismatch')
 
     if type_map is None:
-      from . import default_data_types
-      type_map = default_data_types.TYPE_MAP
+      from . import default_content_types
+      type_map = default_content_types.TYPE_MAP
     assert isinstance(type_map, types.CASTypeRegistry)
 
-    return type_map.validate_async(data, self.data_type, self.charset,
+    return type_map.validate_async(data, self.content_type, self.charset,
                                    check_refs)
-
-  @classmethod
-  @ndb.tasklet
-  def statuses_for(cls, cas_ids):
-    """Returns a map of {status: [cas_id]}.
-
-    status is one of "missing", "confirmed"
-
-    Args:
-      cas_id_iter - A non-blocking iterable of CAS_ID instances.
-    """
-    a, b = itertools.tee(cas_ids)
-    ret = collections.defaultdict(list)
-
-    ents = yield ndb.get_multi_async([str(cas_id) for cas_id in a])
-
-    for cas_id, obj in itertools.izip(b, ents):
-      key = 'missing' if obj is None else 'confirmed'
-      ret[key].append(cas_id)
-    raise ndb.Return(ret)
 
   #### Output conversion
   @utils.cached_property
@@ -228,7 +225,8 @@ class CAS_ID(object):
     return ndb.Key(CASEntry, str(self))
 
   def to_dict(self, exclude=()):
-    r = {'csum': self.csum, 'size': self.size, 'data_type': self.data_type}
+    r = {'csum': self.csum, 'size': self.size,
+         'content_type': self.content_type}
     if self.charset:
       r['charset'] = self.charset
     for key in exclude:
@@ -236,7 +234,7 @@ class CAS_ID(object):
     return r
 
   def __str__(self):
-    fmt = "%(csum)s:%(size)s:%(data_type)s"
+    fmt = "%(csum)s:%(size)s:%(content_type)s"
     if self.charset:
       fmt += ':%(charset)s'
     return fmt % self.to_dict()
@@ -245,15 +243,15 @@ class CAS_ID(object):
 class CAS_IDProperty(ndb.KeyProperty):
   # Pylint thinks this is an old-style class, but it's not really.
   # pylint: disable=E1002
-  def __init__(self, data_type, charset=None, *args, **kwargs):
+  def __init__(self, content_type, charset=None, *args, **kwargs):
     kwargs['kind'] = CASEntry
     super(CAS_IDProperty, self).__init__(*args, **kwargs)
-    self.data_type = data_type
+    self.content_type = content_type
     self.charset = utils.make_set(charset)
 
   def _to_base_type(self, value):
     assert isinstance(value, CAS_ID)
-    assert value.data_type == self.data_type
+    assert value.content_type == self.content_type
     assert value.charset in self.charset
     return value.key
 

@@ -28,12 +28,21 @@ def Execute(api):
     csum.update(MIMETYPE)
     ex_files[csum.hexdigest()] = {'data': data.encode('base64'),
                                   'content_type': MIMETYPE}
+    return {'csum': csum.hexdigest(), 'content_type': MIMETYPE,
+            'size': len(data)}
 
+  cas_ids = []
+  cas_ids.append(add_file())
+  cas_ids.append(add_file())
   add_file()
-  add_file()
-  add_file()
+
+  fake_id = cas_ids[-1].copy()
+  fake_id['csum'] = 'feedface' + fake_id['csum'][8:]
+  cas_ids.append(fake_id)
 
   api.login()
   me = api.GET('accounts/me').json
   api.PUT('cas_entries', json=ex_files, xsrf=me['data']['xsrf'],
           compress=True)
+
+  api.GET('cas_entries/lookup', json=cas_ids)

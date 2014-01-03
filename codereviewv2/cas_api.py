@@ -39,10 +39,21 @@ class CASEntries(rest_handler.RESTCollectionHandler):
 
   # TODO(iannucci): Implement application-defined per-account upload quotas
 
-  def get_lookup_async(self):
-    pass
+  @ndb.tasklet
+  def get_lookup(self, _key, *cas_refs):
+    # [ {csum:, content_type:, size:}]
+    cas_refs = map(models.CAS_ID.from_dict, cas_refs)
+    raise ndb.Return({
+      ent.cas_id.csum: ent.to_dict(exclude=['csum'])
+      for ent in (yield [x.entry_async() for x in cas_refs])
+      if ent is not None
+    })
 
-  def put_async(self, _key, **all_data):
+  def put(self, _key, **all_data):
+    # TODO(iannucci): This function isn't /really/ async... it would be nice
+    # if ndb.tasklet had an Any object you could yield that knew how to wait
+    # for a single Future.
+
     # expect request body to be a json blob:
     #  {
     #    'csum': {
@@ -55,8 +66,8 @@ class CASEntries(rest_handler.RESTCollectionHandler):
     outstanding_futures = utils.IdentitySet()
     buffer_size = 0
 
-    while all_data:
-      csum, data_and_metadata = all_data.popitem()
+    for csum in sorted(all_data.iterkeys()):  # for testing
+      data_and_metadata = all_data.pop(csum)
       data = data_and_metadata.pop('data').decode('base64')
       size = len(data)
       content_type = data_and_metadata['content_type']
@@ -65,10 +76,10 @@ class CASEntries(rest_handler.RESTCollectionHandler):
         if not outstanding_futures:
           break  # current file is huge!
         f = ndb.Future.wait_any(outstanding_futures)
-        cas_id = f.get_result().cas_id
-        buffer_size -= cas_id.size
+        ent = f.get_result()
+        buffer_size -= ent.cas_id.size
         outstanding_futures.remove(f)
-        ret[cas_id.csum] = cas_id.to_dict(exclude=['csum'])
+        ret[ent.cas_id.csum] = ent.to_dict(exclude=['csum'])
 
       buffer_size += size
 
@@ -82,15 +93,15 @@ class CASEntries(rest_handler.RESTCollectionHandler):
 
     while outstanding_futures:
       f = ndb.Future.wait_any(outstanding_futures)
-      cas_id = f.get_result().cas_id
-      ret[cas_id.csum] = cas_id.to_dict(exclude=['csum'])
+      ent = f.get_result()
+      ret[ent.cas_id.csum] = ent.to_dict(exclude=['csum'])
       outstanding_futures.remove(f)
 
-    return utils.completed_future(ret)
+    return ret
 
   @rest_handler.skip_process_request
   @ndb.tasklet
-  def post_one_async(self, key, request):
+  def post_one(self, key, request):
     ent = yield models.CAS_ID.from_key(key).create_async(request.read())
-    raise ndb.Return(ent.cas_id.to_dict())
+    raise ndb.Return(ent.to_dict())
 

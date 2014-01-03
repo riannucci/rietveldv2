@@ -128,7 +128,8 @@ class JSONResponseMiddleware(Middleware):
     result = result or {}
     if isinstance(result, HttpResponse):
       return result
-    assert isinstance(result, dict)
+    if not isinstance(result, dict):
+      result = {'data': result}
     headers = result.pop(HEADERS, {})
     code = result.pop(STATUS_CODE, 200)
     if 'status' not in result:

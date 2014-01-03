@@ -34,7 +34,7 @@ class QueryableCollectionMixin(object):
   DEFAULT_PAGE_LIMIT = 20
   PAGE_LIMIT_MAX = 100
 
-  def get_async(self, key, query_string=None, cursor=None, limit=None,
+  def get(self, key, query_string=None, cursor=None, limit=None,
                     **data):
     model = ndb.Model._kind_map[self.MODEL_NAME]  # pylint: disable=W0212
     assert not data
@@ -111,10 +111,18 @@ def process_json_request(request):
   mimetype = 'application/json'
   assert request.META.get('CONTENT_TYPE', mimetype) == mimetype
 
-  fhandle = request
-  if request.META.get('HTTP_CONTENT_ENCODING', None) == 'gzip':
-    # request's file-like interface doesn't support tell()...
-    fhandle = gzip.GzipFile(fileobj=StringIO(fhandle.read()), mode='r')
+  if request.method in ('GET', 'HEAD'):
+    # Can't have body for these guys, so look for it in the GET params.
+    raw = request.GET.get('json')
+    if raw is None:
+      return {}
+
+    fhandle = StringIO(raw.decode('base64'))
+  else:
+    fhandle = request
+    if request.META.get('HTTP_CONTENT_ENCODING', None) == 'gzip':
+      # request's file-like interface doesn't support tell()...
+      fhandle = gzip.GzipFile(fileobj=StringIO(fhandle.read()), mode='r')
 
   # TODO(iannucci): Support streaming data types so we don't have to have
   # everything in memory all at once.
@@ -129,7 +137,7 @@ def process_json_request(request):
   except:
     logging.exception('Bad JSON request body')
 
-  if not ret or not isinstance(ret, dict):
+  if not ret:
     raise exceptions.BadData('Expected JSON object in request body')
   return ret
 
@@ -161,11 +169,11 @@ class RESTCollectionHandler(object):
   SPECIAL_ROUTES = {}
   MIDDLEWARE = ()
 
-  # e.g. post_async, get_cool_hat_async
+  # e.g. post, get_cool_hat
   # We reserve OPTIONS to implement automatic explorable API endpoint.
   # Install browsable single-doc javascript endpoint at the base of the api.
   _BASE_REGEX = (r'^(?P<method>post|get|put|delete|head)'
-                 r'(?:_(?P<single>one))?(?:_(?P<route>%s))?_async$')
+                 r'(?:_(?P<single>one))?(?:_(?P<route>%s))?$')
 
   @classmethod
   def collection_name(cls):
@@ -253,9 +261,13 @@ class RESTCollectionHandler(object):
               processor = getattr(func, 'process_request', process_json_request)
               data = processor(request)
               if isinstance(data, dict):
-                r = func(inst, *args, **data).get_result()
+                r = func(inst, *args, **data)
+              elif isinstance(data, list):
+                r = func(inst, *(args + tuple(data)))
               else:
-                r = func(inst, *(args + (data,))).get_result()
+                r = func(inst, *(args + (data,)))
+              if hasattr(r, 'get_result'):
+                r = r.get_result()
 
               status = None
               headers = None

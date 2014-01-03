@@ -29,7 +29,8 @@
     json:
       data:
         bab6c9bbdbb47f82f67b04b5f1fcaab8ef2e300fd4e13a5fcff2db3e51e3ad52:
-          data_type: application/octet-stream
+          content_type: application/octet-stream
+          salt: 49MiAJEEiuRTFhdtvqnnpocJTo9oGRvSpB+2w3UYTQk=
           size: 1024
       status:
         code: 200

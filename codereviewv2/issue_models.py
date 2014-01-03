@@ -55,7 +55,7 @@ class Content(diff.Diffable):
     assert mode in (100755, 100644)
 
     # TODO(iannucci): Support variable line endings depending on the
-    lineending = '\n' if data.data_type.startswith('text/') else None
+    lineending = '\n' if data.content_type.startswith('text/') else None
     super(Content, self).__init__(path, timestamp, mode, lineending)
     self._data_id = data
 
@@ -125,7 +125,7 @@ class PatchList(list):
     return ret
 
 
-@cas.default_data_types.TYPE_MAP(PATCHSET_TYPE)
+@cas.default_content_types.TYPE_MAP(PATCHSET_TYPE)
 def patchset_json(data):
   """The json that a client will upload, containing links to other CASEntries.
 
@@ -143,7 +143,7 @@ def patchset_json(data):
     ]
   }
   """
-  parsed = cas.default_data_types.TYPE_MAP['application/json'](data)
+  parsed = cas.default_content_types.TYPE_MAP['application/json'](data)
   assert ['patches'] == parsed.keys()
   assert parsed['patches']
   return PatchList(Patch.from_dict(i, p)
@@ -306,7 +306,7 @@ class Issue(mixins.HideableModelMixin):
   @ndb.tasklet
   def add_patchset_async(self, cas_future, message=None):
     cas_ent = yield cas_future
-    if cas_ent.data_type != PATCHSET_TYPE:
+    if cas_ent.content_type != PATCHSET_TYPE:
       raise exceptions.BadData('Patchset must have datatype %r' % PATCHSET_TYPE)
     self.last_patchset += 1
     ps = Patchset(id=self.last_patchset, message=message, data_ref=cas_ent.key,

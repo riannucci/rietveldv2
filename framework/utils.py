@@ -31,6 +31,15 @@ def completed_future(value):
 NONE_FUTURE = completed_future(None)
 
 
+def constant_time_equals(a, b):
+  if len(a) != len(b):
+    return False
+  acc = 0
+  for ai, bi in zip(a, b):
+    acc |= ord(ai) ^ ord(bi)
+  return acc == 0
+
+
 class IdentitySet(collections.MutableSet):
   # pylint thinks we should implement __getitem__
   # pylint: disable=R0924

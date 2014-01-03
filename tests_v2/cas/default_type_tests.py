@@ -17,7 +17,7 @@ def default_map():
   import urls  # pylint: disable=W0612
   import cas
   r = {}
-  for (prefix, name), func in cas.default_data_types.TYPE_MAP.iteritems():
+  for (prefix, name), func in cas.default_content_types.TYPE_MAP.iteritems():
     r.setdefault(prefix, {})
     r[prefix][name] = func.__module__ + '.' + func.__name__
   return r

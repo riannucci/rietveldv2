@@ -23,7 +23,7 @@ import time
 from google.appengine.ext import ndb
 from google.appengine.api import users
 
-from . import exceptions, account
+from . import exceptions, account, utils
 
 HEADER = 'HTTP_X_XSRF_TOKEN'
 
@@ -49,15 +49,6 @@ def _global_secret():
   return _secret
 
 
-def _constant_time_equals(a, b):
-  if len(a) != len(b):
-    return False
-  acc = 0
-  for ai, bi in zip(a, b):
-    acc |= ord(ai) ^ ord(bi)
-  return acc == 0
-
-
 def _generate_token(stamp):
   user = account.get_current_user()
   assert isinstance(user, users.User)
@@ -70,12 +61,22 @@ def _generate_token(stamp):
 
 
 def assert_xsrf():
-  request_xsrf = os.environ.get(HEADER, None)
-  if request_xsrf is None:
+  raw_request_xsrf = os.environ.get(HEADER, None)
+
+  verified = os.environ.get('XSRF_OK', None)
+  if verified is not None:
+    verified = int(verified)
+    if verified == 1:
+      return raw_request_xsrf
+    else:
+      raise exceptions.Forbidden('make request with invalid XSRF Token')
+  os.environ['XSRF_OK'] = str(0)
+
+  if raw_request_xsrf is None:
     raise exceptions.Forbidden('make request without XSRF Token')
 
   try:
-    request_xsrf = json.loads(base64.urlsafe_b64decode(request_xsrf))
+    request_xsrf = json.loads(base64.urlsafe_b64decode(raw_request_xsrf))
   except:
     logging.exception('Died while trying to decode XSRF token: %s',
                       request_xsrf)
@@ -97,8 +98,11 @@ def assert_xsrf():
   if now - stamp > (60 * 60):
     raise exceptions.Forbidden('make request with expired XSRF Token')
 
-  if not _constant_time_equals(_generate_token(stamp), tag):
+  if not utils.constant_time_equals(_generate_token(stamp), tag):
     raise exceptions.Forbidden('make request with invalid XSRF Token')
+
+  os.environ['XSRF_OK'] = str(1)
+  return raw_request_xsrf
 
 
 def make_header_token():

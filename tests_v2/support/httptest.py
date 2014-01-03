@@ -79,7 +79,9 @@ class HttpTestApi(object):
   def __init__(self, name, base_url, resource_prefix):
     self._base_url = base_url
 
-    self.auto_kwargs = {}
+    self.auto_kwargs = {
+      'timeout': 5.0
+    }
     self.state = []
 
     self._resource_prefix = None
@@ -124,9 +126,12 @@ class HttpTestApi(object):
 
     j = k.pop('json', None)
     if j is not None:
-      assert isinstance(j, dict)
-      k['headers']['Content-Type'] = 'application/json'
-      k['data'] = json.dumps(j)
+      if method in ('GET', 'HEAD'):
+        # trim trailing \n
+        k['params'] = {'json': json.dumps(j).encode('base64')[:-1]}
+      else:
+        k['headers']['Content-Type'] = 'application/json'
+        k['data'] = json.dumps(j)
 
     if k.pop('compress', False):
       assert 'data' in k
@@ -138,7 +143,10 @@ class HttpTestApi(object):
       k['data'] = body.getvalue()
 
     uri = '/'.join(filter(bool, (self._base_url, resource_prefix, resource)))
-    r = self._session.request(method, uri, **k)
+    try:
+      r = self._session.request(method, uri, **k)
+    except requests.exceptions.Timeout as to:
+      raise Exception(str(to))
     final_resource = r.url[len(self._base_url)+1:]
     r = EasyResponse(len(self.state), method, final_resource, r)
 

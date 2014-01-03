@@ -32,8 +32,8 @@ class CASTypeRegistry(dict):
   |CASEntry.new()|.
 
   Pro Tip: You can initialize a new CASTypeRegistry from an existing one.
-    >>> import default_data_types
-    >>> my_reg = CASTypeRegistry(default_data_types.TYPE_MAP)
+    >>> import default_content_types
+    >>> my_reg = CASTypeRegistry(default_content_types.TYPE_MAP)
     >>> my_reg
     {
       (DATA, 'text/plain'): <function ...>,
@@ -46,7 +46,7 @@ class CASTypeRegistry(dict):
   CHARSET = 'charset'
 
   def __call__(self, *type_names, **kwargs):
-    """Use to decorate a validator function for CAS |data_type|s.
+    """Use to decorate a validator function for CAS |content_type|s.
 
     >>> reg = CASTypeRegistry()
     >>> @reg("application/cool_type")
@@ -106,24 +106,24 @@ class CASTypeRegistry(dict):
     return inner
 
   @ndb.tasklet
-  def validate_async(self, data, data_type, charset=None, check_refs=True):
-    if (self.DATA, data_type) not in self:
-      raise exceptions.CASUnknownDataType(self, data_type)
-    data_type_async = self[self.DATA, data_type]
+  def validate_async(self, data, content_type, charset=None, check_refs=True):
+    if (self.DATA, content_type) not in self:
+      raise exceptions.CASUnknownDataType(self, content_type)
+    content_type_async = self[self.DATA, content_type]
 
     if charset:
       if (self.CHARSET, charset) not in self:
         raise exceptions.CASUnknownCharset(self, charset)
       charset_async = self[self.CHARSET, charset]
 
-    required_charsets = data_type_async.required_charsets
+    required_charsets = content_type_async.required_charsets
     if (required_charsets and charset not in required_charsets):
-      raise exceptions.CASCharsetInadequate(data_type, charset,
+      raise exceptions.CASCharsetInadequate(content_type, charset,
                                             required_charsets)
 
     if charset:
       data = yield charset_async(data)
-    data = yield data_type_async(data)
+    data = yield content_type_async(data)
     assert data is not None
 
     if check_refs:
