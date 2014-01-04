@@ -80,7 +80,7 @@ class HttpTestApi(object):
     self._base_url = base_url
 
     self.auto_kwargs = {
-      'timeout': 5.0
+      'timeout': 10.0
     }
     self.state = []
 
@@ -128,7 +128,17 @@ class HttpTestApi(object):
     if j is not None:
       if method in ('GET', 'HEAD'):
         # trim trailing \n
-        k['params'] = {'json': json.dumps(j).encode('base64')[:-1]}
+        if k.pop('compress', False):
+          param = StringIO()
+          gfile = gzip.GzipFile(fileobj=param, mode='w')
+          json.dump(gfile, j)
+          gfile.close()
+          k['params'] = {
+            'json': param.getvalue().encode('base64')[:-1],
+            'compress': 1
+          }
+        else:
+          k['params'] = {'json': json.dumps(j).encode('base64')[:-1]}
       else:
         k['headers']['Content-Type'] = 'application/json'
         k['data'] = json.dumps(j)

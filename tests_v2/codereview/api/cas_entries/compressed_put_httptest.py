@@ -23,9 +23,14 @@ def Execute(api):
   csum.update(str(len(DATA)))
   csum.update(MIMETYPE)
   csum.update(CHARSET)
-  ex_files = {csum.hexdigest(): {'data': DATA.encode('base64'),
-                                 'content_type': MIMETYPE,
-                                 'charset': CHARSET}}
+  ex_files = [{
+    'cas_id': {
+      'csum': csum.hexdigest(),
+      'content_type': MIMETYPE,
+      'charset': CHARSET
+    },
+    'data': DATA.encode('base64'),
+  }]
 
   api.login()
   me = api.GET('accounts/me').json

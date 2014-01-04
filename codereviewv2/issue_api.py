@@ -13,9 +13,12 @@
 # limitations under the License.
 
 import collections
+import logging
 
 from google.appengine.ext import ndb
 from django.http import HttpResponse
+
+import cas
 
 from framework import middleware, exceptions, utils, rest_handler
 
@@ -23,6 +26,20 @@ from . import issue_models
 from .common import API_PREFIX
 
 STATUS_CODE = middleware.STATUS_CODE
+
+@ndb.non_transactional
+@ndb.tasklet
+def ownership_proof(pset_cas_id, proofs):
+  if pset_cas_id.content_type != issue_models.PATCHSET_TYPE:
+    raise exceptions.BadData('Patchset must have datatype %r'
+                              % issue_models.PATCHSET_TYPE)
+  pset = yield pset_cas_id.data_async()
+  for cas_entry in (yield [x.entry_async() for x in pset.CAS_REFERENCES]):
+    csum = cas_entry.cas_id.csum
+    # TODO(iannucci): This could be parallelized if prove_ownership was async
+    if not cas_entry.prove_ownership(proofs[csum]):
+      raise exceptions.Forbidden(
+        'add patchset due to insufficient proof for %s' % csum)
 
 
 class Issues(rest_handler.RESTCollectionHandler,
@@ -33,8 +50,9 @@ class Issues(rest_handler.RESTCollectionHandler,
   # get implemented by QueryableCollectionMixin
 
   @ndb.transactional_tasklet
-  def post(self, _key, send_message=False, patchset=None, **data):
-    patchset_cas = issue_models.get_cas_future(patchset)
+  def post(self, _key, send_message=False, patchset=None, proofs=None, **data):
+    pset_cas_id = cas.models.CAS_ID.from_dict(patchset)
+    ownership_proof_fut = ownership_proof(pset_cas_id, proofs)
 
     issue = yield issue_models.Issue.create_async(**data)
     if not issue.cc and not issue.reviewers and send_message:
@@ -54,7 +72,8 @@ class Issues(rest_handler.RESTCollectionHandler,
     # as if it's already collected.  This could probably be implemented in
     # CASEntry itself.
     yield [
-      issue.add_patchset_async(patchset_cas),
+      ownership_proof_fut,
+      issue.add_patchset_async(pset_cas_id),
       issue.add_message_async() if send_message else utils.NONE_FUTURE
     ]
 

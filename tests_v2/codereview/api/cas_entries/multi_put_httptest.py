@@ -20,21 +20,26 @@ DATA = lambda: ''.join(chr(R.randint(0, 255)) for _ in xrange(60 * 1024))
 MIMETYPE = 'application/octet-stream'
 
 def Execute(api):
-  ex_files = {}
+  ex_files = []
   def add_file():
     data = DATA()
     csum = hashlib.sha256(data)
     csum.update(str(len(data)))
     csum.update(MIMETYPE)
-    ex_files[csum.hexdigest()] = {'data': data.encode('base64'),
-                                  'content_type': MIMETYPE}
-    return {'csum': csum.hexdigest(), 'content_type': MIMETYPE,
-            'size': len(data)}
+    ex_files.append({
+      'data': data.encode('base64'),
+      'cas_id': {
+        'csum': csum.hexdigest(),
+        'size': len(data),
+        'content_type': MIMETYPE
+      }
+    })
+    return ex_files[-1]['cas_id']
 
   cas_ids = []
   cas_ids.append(add_file())
-  cas_ids.append(add_file())
   add_file()
+  cas_ids.append(add_file())
 
   fake_id = cas_ids[-1].copy()
   fake_id['csum'] = 'feedface' + fake_id['csum'][8:]

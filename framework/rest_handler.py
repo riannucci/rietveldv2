@@ -116,8 +116,9 @@ def process_json_request(request):
     raw = request.GET.get('json')
     if raw is None:
       return {}
-
     fhandle = StringIO(raw.decode('base64'))
+    if int(request.GET.get('compress', '0')):
+      fhandle = gzip.GzipFile(fileobj=fhandle, mode='r')
   else:
     fhandle = request
     if request.META.get('HTTP_CONTENT_ENCODING', None) == 'gzip':

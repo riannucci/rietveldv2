@@ -111,4 +111,4 @@ class HideableModelMixin(authed_model.AuthedModel, HierarchyMixin):
       super(HideableModelMixin, self)._post_query_filter())
 
   def can_read(self):
-    return super(HideableModelMixin, self).can_read() and not self.hidden
+    return not self.hidden

@@ -16,7 +16,7 @@
 
 from google.appengine.ext import ndb
 
-from framework import rest_handler, utils
+from framework import rest_handler, utils, exceptions
 from framework.monkeypatch import fix_django_transfer_encoding   # pylint: disable=W0611
 
 from cas import models
@@ -43,34 +43,45 @@ class CASEntries(rest_handler.RESTCollectionHandler):
   def get_lookup(self, _key, *cas_refs):
     # [ {csum:, content_type:, size:}]
     cas_refs = map(models.CAS_ID.from_dict, cas_refs)
-    raise ndb.Return({
-      ent.cas_id.csum: ent.to_dict(exclude=['csum'])
-      for ent in (yield [x.entry_async() for x in cas_refs])
-      if ent is not None
-    })
+    ents = filter(bool, (yield [x.entry_async() for x in cas_refs]))
+    raise ndb.Return([ent.to_dict() for ent in ents])
 
-  def put(self, _key, **all_data):
+  def put(self, _key, *items):
     # TODO(iannucci): This function isn't /really/ async... it would be nice
     # if ndb.tasklet had an Any object you could yield that knew how to wait
     # for a single Future.
 
     # expect request body to be a json blob:
-    #  {
-    #    'csum': {
+    #  [
+    #    {
     #      'data': base64(file data),
-    #      'content_type': <content_type>,
-    #      'charset': <charset>,  # optional
+    #      'cas_id': {
+    #        'csum': <csum>,
+    #        'content_type': <content_type>,
+    #        'charset': <charset>,  # optional
+    #      }
     #    }
-    #  }
-    ret = {}
+    #  ]
+    ret = []
     outstanding_futures = utils.IdentitySet()
     buffer_size = 0
 
-    for csum in sorted(all_data.iterkeys()):  # for testing
-      data_and_metadata = all_data.pop(csum)
-      data = data_and_metadata.pop('data').decode('base64')
+    key_order = {item['cas_id']['csum']: i for i, item in enumerate(items)}
+    items = list(reversed(items))
+    while items:
+      item = items.pop()
+      data, cas_id = item.pop('data').decode('base64'), item.pop('cas_id')
       size = len(data)
-      content_type = data_and_metadata['content_type']
+      content_type = cas_id['content_type']
+      charset = cas_id.get('charset')
+      if charset:
+        charset = charset.lower()
+      if content_type.startswith('text/') and not charset:
+        raise exceptions.BadData('text/* content_types must have a charset.')
+
+      assert charset in (None, 'utf-8', 'ascii')
+      cas_id = models.CAS_ID(cas_id['csum'].decode('hex'), size, content_type,
+                             charset)
 
       while (buffer_size + size) >= self.MAX_BUFFER_SIZE:
         if not outstanding_futures:
@@ -79,25 +90,19 @@ class CASEntries(rest_handler.RESTCollectionHandler):
         ent = f.get_result()
         buffer_size -= ent.cas_id.size
         outstanding_futures.remove(f)
-        ret[ent.cas_id.csum] = ent.to_dict(exclude=['csum'])
+        ret.append(ent.to_dict())
 
       buffer_size += size
 
-      charset = None
-      if content_type.startswith('text/'):
-        charset = data_and_metadata.get('charset', 'ascii').lower()
-      assert charset in (None, 'utf-8', 'ascii')
-      cas_id = models.CAS_ID(csum.decode('hex'), size, content_type,
-                             charset)
       outstanding_futures.add(cas_id.create_async(data))
 
     while outstanding_futures:
       f = ndb.Future.wait_any(outstanding_futures)
       ent = f.get_result()
-      ret[ent.cas_id.csum] = ent.to_dict(exclude=['csum'])
+      ret.append(ent.to_dict())
       outstanding_futures.remove(f)
 
-    return ret
+    return sorted(ret, key=lambda i: key_order[i['csum']])
 
   @rest_handler.skip_process_request
   @ndb.tasklet

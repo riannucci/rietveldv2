@@ -45,7 +45,7 @@ class CASData(ndb.Model):
     ret = []
     for klazz in CASData.__subclasses__():
       # pylint: disable=W0212
-      ret.append(ndb.Key(pairs=parent + [(klazz._get_kind(), 1)]))
+      ret.append(ndb.Key(pairs=parent + ((klazz._get_kind(), 1),)))
     return ret
 
 
@@ -73,7 +73,8 @@ class CASEntry(ndb.Model):
 
   def prove_ownership(self, proof):
     # TODO(iannucci): Make async
-    expected = hmac.new(xsrf.assert_xsrf(), self.salt_hash).digest()
+    expected = hmac.new(xsrf.assert_xsrf(), self.salt_hash,
+                        CAS_ID.HASH_ALGO).hexdigest()
     return utils.constant_time_equals(proof, expected)
 
   def to_dict(self, exclude=()):
@@ -133,7 +134,6 @@ class CAS_ID(object):
 
 
   #### Data factory
-  @ndb.transactional_tasklet(retries=0)  # pylint: disable=E1120
   def create_async(self, data, type_map=None):
     """Create a new, validated CASEntry object, and return an async_put for
     it.
@@ -141,34 +141,38 @@ class CAS_ID(object):
     It is an error to create() an existing CASEntry.
     """
     assert isinstance(data, str)  # specifically want data to be raw bytes.
+    salt = os.urandom(32)  # allocate early and outside txn, so that the tests
+                           # are deterministic
 
-    if (yield self.key.get_async()) is not None:
-      logging.error("Attempted to create('%s') which already exists" % self)
-      raise exceptions.CASError("CASEntry('%s') already exists." % self)
+    @ndb.transactional_tasklet(retries=0)  # pylint: disable=E1120
+    def txn():
+      if (yield self.key.get_async()) is not None:
+        logging.error("Attempted to create('%s') which already exists" % self)
+        raise exceptions.CASError("CASEntry('%s') already exists." % self)
 
-    # TODO(iannucci): Implement delayed validation by storing the object as
-    # an UnvalidatedCASEntry, and then fire a taskqueue task to promote it to
-    # a CASEntry when it's ripe.
-    yield self.verify_async(data, type_map)
+      # TODO(iannucci): Implement delayed validation by storing the object as
+      # an UnvalidatedCASEntry, and then fire a taskqueue task to promote it to
+      # a CASEntry when it's ripe.
+      yield self.verify_async(data, type_map)
 
-    # TODO(iannucci): async version of hmac/checksum
-    salt = os.urandom(32)
-    salt_hash = hmac.new(salt, data, hashlib.sha256)
+      # TODO(iannucci): async version of hmac/checksum
+      salt_hash = hmac.new(salt, data, self.HASH_ALGO)
 
-    entry = CASEntry(key=self.key, salt=salt, salt_hash=salt_hash.digest())
+      entry = CASEntry(key=self.key, salt=salt, salt_hash=salt_hash.digest())
 
-    yield [
-      entry.put_async(),
-      # TODO(iannucci): Implement other data storage methods.
-      CASDataInline(parent=self.key, id=1, data=data).put_async()
-    ]
-    raise ndb.Return(entry)
+      yield [
+        entry.put_async(),
+        # TODO(iannucci): Implement other data storage methods.
+        CASDataInline(parent=self.key, id=1, data=data).put_async()
+      ]
+      raise ndb.Return(entry)
+
+    return txn()
 
   #### Data accessors
   def entry_async(self):
     return self.key.get_async()
 
-  @utils.hybridmethod
   @ndb.tasklet
   def raw_data_async(self):
     """Retrieves the actual Data entity for this CASEntry.
@@ -190,7 +194,6 @@ class CAS_ID(object):
       data_obj = data_objs[0]
     raise ndb.Return((yield data_obj.data_async))
 
-  @utils.hybridmethod
   @ndb.tasklet
   def data_async(self, type_map=None):
     data = yield self.raw_data_async()

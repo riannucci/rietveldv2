@@ -128,9 +128,9 @@ class AuthedModel(ndb.Model):
     return rslt
 
   @utils.hybridmethod
-  def assert_can((self, cls), perm, **kwargs):
-    if not (self or cls).can(perm, **kwargs):
-      raise exceptions.Forbidden(perm)
+  def assert_can((self, cls), perm, *args, **kwargs):
+    if not (self or cls).can(perm, *args, **kwargs):
+      raise exceptions.Forbidden('%s %r' % (perm, cls.__name__))
 
   #### Overrides
   def to_dict(self, *args, **kwargs):
@@ -144,7 +144,9 @@ class AuthedModel(ndb.Model):
   #### Hooks
   @classmethod
   def _pre_allocate_ids_hook(cls, size, max, parent):
-    cls.assert_can('create', ndb.Key(parent.flat()+(cls._class_name(), None)))
+    parent_flat = parent.flat() if parent else ()
+    key = ndb.Key(flat=parent_flat+(cls._class_name(), None))
+    cls.assert_can('create', key)
     super(AuthedModel, cls)._pre_allocate_ids_hook(size, max, parent)
 
   @classmethod
@@ -160,7 +162,7 @@ class AuthedModel(ndb.Model):
   def _pre_get_hook(cls, key):
     # be lazy here, _post_get_hook might catch it.
     if cls.can('read', key, lazy=True) is False:
-      raise exceptions.Forbidden('read')
+      raise exceptions.Forbidden('read %r' % cls.__name__)
     super(AuthedModel, cls)._pre_get_hook(key)
 
   @classmethod

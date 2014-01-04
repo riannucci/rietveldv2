@@ -47,11 +47,11 @@
     code: 200
     json:
       data:
-        d19fa3cd84e9f738dad86264cb606b28626700dcb5cc7bd300eb990e5757ecff:
-          charset: utf-8
-          content_type: text/plain
-          salt: hQU4fbqMBeWGSHAVQ1biYweCtmLFhdNoOAC1GUYfiZA=
-          size: 29
+      - charset: utf-8
+        content_type: text/plain
+        csum: d19fa3cd84e9f738dad86264cb606b28626700dcb5cc7bd300eb990e5757ecff
+        salt: hQU4fbqMBeWGSHAVQ1biYweCtmLFhdNoOAC1GUYfiZA=
+        size: 29
       status:
         code: 200
         type: OK

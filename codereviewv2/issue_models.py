@@ -21,16 +21,11 @@ from google.appengine.ext.ndb import metadata
 
 import cas
 
-from framework import utils, mixins, exceptions, authed_model
+from framework import utils, mixins, exceptions, authed_model, account
 
 from . import auth_models, diff
 
 PATCHSET_TYPE = 'application/patchset+json'
-
-
-@ndb.non_transactional
-def get_cas_future(cas_dict):
-  return cas.models.CAS_ID.fromdict(cas_dict).key.get_async()
 
 
 class LowerEmailProperty(ndb.StringProperty):
@@ -42,13 +37,13 @@ class LowerEmailProperty(ndb.StringProperty):
 
 
 class Content(diff.Diffable):
-  PATH_RE = re.compile(r'[\x00-\x1F"*:<>?\/|]')
+  PATH_RE = re.compile(r'[\x00-\x1F\'"*:<>?|]')
 
   def __init__(self, content):
     path = content.pop('path')
     mode = content.pop('mode')
     timestamp = content.pop('timestamp')
-    data = cas.models.CAS_ID.fromdict(content.pop('data'))
+    data = cas.models.CAS_ID.from_dict(content.pop('data'))
     assert not content
     assert not self.PATH_RE.search(path)
     # TODO(iannucci): Support symlinks and gitlinks?
@@ -57,20 +52,20 @@ class Content(diff.Diffable):
     # TODO(iannucci): Support variable line endings depending on the
     lineending = '\n' if data.content_type.startswith('text/') else None
     super(Content, self).__init__(path, timestamp, mode, lineending)
-    self._data_id = data
+    self.cas_id = data
 
   @utils.cached_property
   def data_async(self):
-    return self._data_id.data_async()
+    return self.cas_id.data_async()
 
   @utils.cached_property
   def size(self):
-    return self._data_id.size
+    return self.cas_id.size
 
   def to_dict(self):
     r = super(Content, self).to_dict()
     r.update(
-      data=self._data_id.to_dict()
+      data=self.cas_id.to_dict()
     )
     return r
 
@@ -125,7 +120,8 @@ class PatchList(list):
     return ret
 
 
-@cas.default_content_types.TYPE_MAP(PATCHSET_TYPE)
+@cas.default_content_types.TYPE_MAP(PATCHSET_TYPE, require_charset='utf-8')
+@ndb.tasklet
 def patchset_json(data):
   """The json that a client will upload, containing links to other CASEntries.
 
@@ -143,11 +139,18 @@ def patchset_json(data):
     ]
   }
   """
-  parsed = cas.default_content_types.TYPE_MAP['application/json'](data)
+  type_map = cas.default_content_types.TYPE_MAP
+  parsed = yield type_map['data', 'application/json'](data)
+
   assert ['patches'] == parsed.keys()
   assert parsed['patches']
-  return PatchList(Patch.from_dict(i, p)
-                   for i, p in enumerate(parsed['patches']))
+  raise ndb.Return(
+    PatchList(Patch.from_dict(i, p) for i, p in enumerate(parsed['patches'])))
+
+
+def no_extra(data):
+  if data:
+    raise exceptions.BadData('Got extra data: %r' % (data,))
 
 
 class Issue(mixins.HideableModelMixin):
@@ -191,17 +194,17 @@ class Issue(mixins.HideableModelMixin):
   @ndb.tasklet
   def create_async(cls, subject='', description='', cc=(),
                    reviewers=(), private=False, **data):
-    cls.no_extra(data)
-    # Need to allocate id so we can start using the id.
+    no_extra(data)
     issue = cls(
-      id=(yield cls.allocate_ids_async(1)),
       subject=subject,
       description=description,
       cc=cc,
       reviewers=reviewers,
       private=private,
     )
-    issue.set_notification('issue.create', issue.key)
+    # Need to allocate id so we can start using the id.
+    yield issue.put_async()
+    issue.set_notification_async('issue.create', issue.key)
     issue.patchsets_async = utils.completed_future([])
     issue.messages_async = utils.completed_future([])
     raise ndb.Return(issue)
@@ -219,13 +222,15 @@ class Issue(mixins.HideableModelMixin):
         url='/restricted/issue_notify',
         payload=json.dumps({'issue': self.key.urlsafe()}),
         headers = {'Content-Type': 'application/json'}
-      ).add_async('issue_notify', transactional=True)
+      ).add_async('issue-notify', transactional=True)
 
-  def set_notification(self, notification, key):
+  @ndb.tasklet
+  def set_notification_async(self, notification, key):
     self.notifications = self.notifications or {}
-    lst = self.notifications.setdefault(notification, [])
-    self.notifications[notification] = list(set(lst).update([key.urlsafe()]))
-    self.mark()
+    lst = set(self.notifications.setdefault(notification, []))
+    lst.update([key.urlsafe()])
+    self.notifications[notification] = list(lst)
+    yield self.mark_async()
 
   #### Datastore Read Operations
   @utils.cached_assignable_property
@@ -301,15 +306,12 @@ class Issue(mixins.HideableModelMixin):
     if description:
       del self.collaborators
       del self.editors
-    self.no_extra(data)
+    no_extra(data)
 
   @ndb.tasklet
-  def add_patchset_async(self, cas_future, message=None):
-    cas_ent = yield cas_future
-    if cas_ent.content_type != PATCHSET_TYPE:
-      raise exceptions.BadData('Patchset must have datatype %r' % PATCHSET_TYPE)
+  def add_patchset_async(self, cas_id, message=None):
     self.last_patchset += 1
-    ps = Patchset(id=self.last_patchset, message=message, data_ref=cas_ent.key,
+    ps = Patchset(id=self.last_patchset, message=message, data_ref=cas_id,
                   parent=self.key)
     self.n_patchsets += 1
     yield ps.mark_async()
@@ -317,7 +319,7 @@ class Issue(mixins.HideableModelMixin):
     if lst is None:
       lst = self.patchsets_async.get_result()
     lst.append(ps)
-    self.set_notifications('patchset.create', ps.key)
+    yield self.set_notification_async('patchset.create', ps.key)
     raise ndb.Return(ps)
 
   @ndb.tasklet
@@ -357,7 +359,7 @@ class Issue(mixins.HideableModelMixin):
     if lst is None:
       lst = self.messages_async.get_result()
     lst.append(m)
-    self.set_notification('message.create', m.key)
+    yield self.set_notification_async('message.create', m.key)
     raise ndb.Return(m)
 
   #### In-memory data accessors
@@ -372,7 +374,7 @@ class Issue(mixins.HideableModelMixin):
 
   @utils.clearable_cached_property
   def editors(self):
-    return set([self.owner] + self.collaborators)
+    return set([self.owner.email()] + self.collaborators)
 
   @utils.clearable_cached_property
   def viewers(self):
@@ -381,21 +383,21 @@ class Issue(mixins.HideableModelMixin):
   #### AuthedModel overrides
   @classmethod
   def can_create_key(cls, _key):
-    return auth_models.current_account() is not None
+    return account.get_current_user() is not None
 
   def can_read(self):
     ret = super(Issue, self).can_read()
     if ret:
       if self.private:
-        account = auth_models.current_account()
-        ret = account and account.email in self.viewers
+        cur_user = account.get_current_user()
+        ret = cur_user and cur_user.email() in self.viewers
       else:
         ret = True
     return ret
 
   def can_update(self):
-    account = auth_models.current_account()
-    return account and account.email in self.editors
+    cur_user = account.get_current_user()
+    return cur_user and cur_user.email() in self.editors
 
 
 class Comment(ndb.Model):
@@ -423,7 +425,7 @@ class Comment(ndb.Model):
 
 class Patchset(mixins.HideableModelMixin):
   message = ndb.TextProperty(indexed=False)
-  data_ref = cas.models.CAS_IDProperty(PATCHSET_TYPE)
+  data_ref = cas.models.CAS_IDProperty(PATCHSET_TYPE, 'utf-8')
 
   created_by = auth_models.AccountProperty(auto_current_user_add=True,
                                         indexed=False)
@@ -567,7 +569,7 @@ class IssueMetadata(authed_model.AuthedModel):
   @classmethod
   @ndb.transactional_tasklet
   def update_async(cls, my_key, drafts, **data):
-    cls.no_extra(data)
+    no_extra(data)
     ent = yield my_key.get_async()
     if ent is None:
       ent = cls(key=my_key)
@@ -614,7 +616,8 @@ class IssueMetadata(authed_model.AuthedModel):
   #### AuthedModel overrides
   @classmethod
   def can_create_key(cls, key):
-    return auth_models.current_account().email == key.parent().id()
+    cur_user = account.get_current_user()
+    return cur_user and cur_user.email() == key.parent().id()
 
   @classmethod
   def can_read_key(cls, key):

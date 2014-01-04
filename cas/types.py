@@ -96,6 +96,7 @@ class CASTypeRegistry(dict):
           logging.exception("While validating %r", primary_name)
           raise exceptions.CASValidationError("Invalid %r" % (primary_name,))
         raise ndb.Return(ret)
+      wrapped.__wrapped__ = f
       required_charsets = listify(kwargs.get('require_charset', ()))
       wrapped.required_charsets = set(required_charsets)
 
@@ -128,6 +129,13 @@ class CASTypeRegistry(dict):
 
     if check_refs:
       refs = getattr(data, 'CAS_REFERENCES', ())
-      assert None not in (yield [cid.entry_async for cid in refs])
+      @ndb.non_transactional
+      @ndb.tasklet
+      def ntx():
+        ents = (yield [cid.entry_async() for cid in refs])
+        bad = [str(cid) for cid, ent in zip(refs, ents) if ent is None]
+        if bad:
+          raise exceptions.CASValidationError('Invalid references: %r' % bad)
+      yield ntx()
 
     raise ndb.Return(data)

@@ -19,7 +19,13 @@ def default_map():
   r = {}
   for (prefix, name), func in cas.default_content_types.TYPE_MAP.iteritems():
     r.setdefault(prefix, {})
-    r[prefix][name] = func.__module__ + '.' + func.__name__
+    module = func.__module__
+    fname = func.__name__
+    while hasattr(func, '__wrapped__'):
+      func = func.__wrapped__
+      module = func.__module__
+      fname = func.__name__
+    r[prefix][name] = module + '.' + fname
   return r
 
 

@@ -36,3 +36,5 @@ queue:
     task_retry_limit: 60
     min_backoff_seconds: 10
     max_backoff_seconds: 60
+
+- name: issue-notify
