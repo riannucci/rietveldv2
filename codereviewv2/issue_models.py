@@ -21,7 +21,8 @@ from google.appengine.ext.ndb import metadata
 
 import cas
 
-from framework import utils, mixins, exceptions, authed_model, account
+from framework import (utils, mixins, exceptions, authed_model, account,
+                       query_parser)
 
 from . import auth_models, diff
 
@@ -168,7 +169,7 @@ def no_extra(data):
     raise exceptions.BadData('Got extra data: %r' % (data,))
 
 
-class Issue(mixins.HideableModelMixin):
+class Issue(mixins.HideableModelMixin, query_parser.StringQueryMixin):
   # Old Issue models won't have a VERSION field at all
   VERSION = ndb.IntegerProperty(default=2, indexed=False)
 

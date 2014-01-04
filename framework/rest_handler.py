@@ -27,40 +27,7 @@ from google.appengine.ext import ndb
 from django.conf.urls.defaults import url
 from django.http import HttpResponse
 
-from . import xsrf, handler, middleware, query_parser, exceptions, account
-
-
-class QueryableCollectionMixin(object):
-  DEFAULT_PAGE_LIMIT = 20
-  PAGE_LIMIT_MAX = 100
-
-  def get(self, key, query_string=None, cursor=None, limit=None,
-                    **data):
-    model = ndb.Model._kind_map[self.MODEL_NAME]  # pylint: disable=W0212
-    assert not data
-    limit = int(limit or self.DEFAULT_PAGE_LIMIT)
-    assert limit < self.PAGE_LIMIT_MAX
-
-    if cursor is not None:
-      cursor = ndb.Cursor(urlsafe=cursor)
-
-    if query_string:
-      query, _ = yield query_parser.parse_query_async(model, query_string,
-                                                      key.parent())
-    else:
-      query = model.query()
-    if query._needs_multi_query():  # pylint: disable=W0212
-      query = query.order(model.key)
-
-    results, cursor, more = yield query.fetch_page_async(
-        limit, start_cursor=cursor
-    )
-
-    ret = {'data': [x.to_dict() for x in results]}
-    if more:
-      ret['cursor'] = cursor.urlsafe()
-
-    raise ndb.Return(ret)
+from . import xsrf, handler, middleware, exceptions, account
 
 
 class KeyMiddleware(middleware.Middleware):
@@ -291,6 +258,44 @@ class RESTCollectionHandler(object):
           url_regex, handler.RequestHandler(mware, **methods), name=name))
 
     return ret
+
+
+class QueryableCollectionMixin(object):
+  DEFAULT_PAGE_LIMIT = 20
+  PAGE_LIMIT_MAX = 100
+
+  def _getparms(request):  # pylint: disable=E0213
+    parms = request.GET
+    return {
+      'query_string': parms['q'],
+      'cursor': (ndb.Cursor(urlsafe=parms['cursor'])
+                 if 'cursor' in parms else None),
+      'limit': int(
+        parms.get('limit', QueryableCollectionMixin.DEFAULT_PAGE_LIMIT)),
+    }
+
+  @custom_process_request(_getparms)
+  @ndb.tasklet
+  def get(self, key, query_string, cursor=None, limit=None):
+    model = ndb.Model._kind_map[self.MODEL_NAME]  # pylint: disable=W0212
+    assert limit < self.PAGE_LIMIT_MAX
+
+    if query_string:
+      query, _ = yield model.parse_query_async(query_string, key.parent())
+    else:
+      query = model.query()
+    if query._needs_multi_query():  # pylint: disable=W0212
+      query = query.order(model.key)
+
+    results, cursor, more = yield query.fetch_page_async(
+        limit, start_cursor=cursor
+    )
+
+    ret = {'data': [x.to_dict() for x in results]}
+    if more:
+      ret['cursor'] = cursor.urlsafe()
+
+    raise ndb.Return(ret)
 
 
 def leaf_subclasses(cls):
