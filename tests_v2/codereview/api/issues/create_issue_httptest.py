@@ -110,4 +110,10 @@ def Execute(api):
     'description': 'A totes awesome haiku\n\nSeriously, it\'s freaking sweet.',
     'subject': 'A totes awesome haiku',
   }
-  api.POST('issues', json=issue, xsrf=xsrf)
+  iid = api.POST('issues', json=issue, xsrf=xsrf).json['data']['id']
+
+  api.GET('issues/%d' % iid)
+
+  api.GET('issues/%d/patchsets' % iid)
+
+  api.GET('issues/%d/patchsets/1' % iid)

@@ -59,7 +59,88 @@
     code: 201
     json:
       data:
+        VERSION: 2
+        approval_status: null
+        cc: []
+        closed: false
+        created: '2013-12-27 02:25:36.612107'
+        description: 'A totes awesome haiku
+
+
+          Seriously, it''s freaking sweet.'
         id: 5629499534213120
+        modified: '2013-12-27 02:25:36.612107'
+        n_comments: 0
+        n_messages: 0
+        n_patchsets: 1
+        owner: test@example.com
+        private: false
+        reviewers:
+        - bob@gnarly.com
+        subject: A totes awesome haiku
       status:
         code: 201
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120'
+  response:
+    code: 200
+    json:
+      data:
+        VERSION: 2
+        approval_status: null
+        cc: []
+        closed: false
+        created: '2013-12-27 02:25:36.612107'
+        description: 'A totes awesome haiku
+
+
+          Seriously, it''s freaking sweet.'
+        id: 5629499534213120
+        modified: '2013-12-27 02:25:36.612107'
+        n_comments: 0
+        n_messages: 0
+        n_patchsets: 1
+        owner: test@example.com
+        private: false
+        reviewers:
+        - bob@gnarly.com
+        subject: A totes awesome haiku
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets'
+  response:
+    code: 200
+    json:
+      data:
+      - comments: []
+        created: '2013-12-27 02:25:36.612107'
+        created_by: test@example.com
+        data_ref:
+          charset: utf-8
+          content_type: application/patchset+json
+          csum: cc076952aadf9da5c880d055448a309c7ca2b5662d5ac291ca9c5595427caffd
+          size: 513
+        id: 1
+        message: null
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1'
+  response:
+    code: 200
+    json:
+      data:
+        comments: []
+        created: '2013-12-27 02:25:36.612107'
+        created_by: test@example.com
+        data_ref:
+          charset: utf-8
+          content_type: application/patchset+json
+          csum: cc076952aadf9da5c880d055448a309c7ca2b5662d5ac291ca9c5595427caffd
+          size: 513
+        id: 1
+        message: null
+      status:
+        code: 200
         type: OK

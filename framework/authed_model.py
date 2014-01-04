@@ -133,9 +133,9 @@ class AuthedModel(ndb.Model):
       raise exceptions.Forbidden('%s %r' % (perm, cls.__name__))
 
   #### Overrides
-  def to_dict(self, *args, **kwargs):
+  def to_dict(self, include=None, exclude=None):
     self.assert_can('read')
-    return super(AuthedModel, self).to_dict(*args, **kwargs)
+    return super(AuthedModel, self).to_dict(include=include, exclude=exclude)
 
   def populate(self, *args, **kwargs):
     self.assert_can('update')

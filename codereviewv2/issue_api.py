@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import collections
-import logging
 
 from google.appengine.ext import ndb
 from django.http import HttpResponse
@@ -78,7 +77,7 @@ class Issues(rest_handler.RESTCollectionHandler,
     ]
 
     yield issue.flush_to_ds_async()
-    raise ndb.Return({STATUS_CODE: 201, 'id': issue.key.id()})
+    raise ndb.Return({STATUS_CODE: 201, 'data': issue.to_dict()})
 
   @ndb.tasklet
   def get_one(self, key):
@@ -117,8 +116,7 @@ class Drafts(rest_handler.RESTCollectionHandler):
     raise ndb.Return(metadata.drafts[key.id()].to_dict())
 
 
-class Patchsets(rest_handler.RESTCollectionHandler,
-                rest_handler.QueryableCollectionMixin):
+class Patchsets(rest_handler.RESTCollectionHandler):
   PARENT = Issues
   MODEL_NAME = 'Patchset'
   SPECIAL_ROUTES = {
@@ -128,12 +126,21 @@ class Patchsets(rest_handler.RESTCollectionHandler,
   BUFFER_LIMIT = 10 * 1024 * 1024  # only buffer up to 10MB of data at a time
 
   @ndb.transactional_tasklet
-  def post(self, key, patchset=None, message=None):
-    patchset_cas = issue_models.get_cas_future(patchset)
-    issue = yield key.parent().get_async()
-    ps = yield issue.add_patchset_async(patchset_cas, message=message)
+  def post(self, key, patchset=None, message=None, proofs=None):
+    pset_cas_id = cas.models.CAS_ID.from_dict(patchset)
+    issue, _ = yield [
+      key.parent().get_async(),
+      ownership_proof(pset_cas_id, proofs)
+    ]
+    ps = yield issue.add_patchset_async(pset_cas_id, message=message)
     yield issue.flush_to_ds_async()
-    raise ndb.Return({STATUS_CODE: 201, 'id': ps.key.id()})
+    raise ndb.Return({STATUS_CODE: 201, 'data': ps.to_dict()})
+
+  @ndb.tasklet
+  def get(self, key):
+    issue = yield key.parent().get_async()
+    psets = [x.to_dict() for x in (yield issue.patchsets_async)]
+    raise ndb.Return(psets)
 
   @ndb.tasklet
   def get_one(self, key):

@@ -28,6 +28,21 @@ from . import auth_models, diff
 PATCHSET_TYPE = 'application/patchset+json'
 
 
+@ndb.tasklet
+def limit_entities_async(model_name, base_key, limit):
+  ret = []
+  futures = [
+    ndb.Key(pairs=base_key.pairs() + ((model_name, i),)).get_async()
+    for i in range(1, limit+1)
+  ]
+  for f in futures:
+    try:
+      ret.append((yield f))
+    except exceptions.Forbidden:
+      pass
+  raise ndb.Return(ret)
+
+
 class LowerEmailProperty(ndb.StringProperty):
   def _validate(self, value):
     value = value.lower()
@@ -172,8 +187,8 @@ class Issue(mixins.HideableModelMixin):
   private = ndb.BooleanProperty()
 
   ## Metadata
-  last_patchset = ndb.IntegerProperty(default=-1)
-  last_message = ndb.IntegerProperty(default=-1)
+  last_patchset = ndb.IntegerProperty(default=0)
+  last_message = ndb.IntegerProperty(default=0)
 
   n_comments = ndb.IntegerProperty(default=0)
   n_messages = ndb.IntegerProperty(default=0)
@@ -182,12 +197,6 @@ class Issue(mixins.HideableModelMixin):
   approval_status = ndb.JsonProperty(compressed=True)
   notifications = ndb.JsonProperty(compressed=True)
 
-
-  #### Constructor
-  def __init__(self, *args, **kwargs):
-    super(Issue, self).__init__(*args, **kwargs)
-    self.added_patchsets = []
-    self.added_messages = []
 
   #### Factory Function
   @classmethod
@@ -205,8 +214,6 @@ class Issue(mixins.HideableModelMixin):
     # Need to allocate id so we can start using the id.
     yield issue.put_async()
     issue.set_notification_async('issue.create', issue.key)
-    issue.patchsets_async = utils.completed_future([])
-    issue.messages_async = utils.completed_future([])
     raise ndb.Return(issue)
 
   #### Notifications
@@ -233,39 +240,13 @@ class Issue(mixins.HideableModelMixin):
     yield self.mark_async()
 
   #### Datastore Read Operations
-  @utils.cached_assignable_property
-  @ndb.tasklet
+  @utils.cached_property
   def messages_async(self):  # pylint: disable=E0202
-    ret = []
-    message_futures = [
-      ndb.Key(pairs=self.key.pairs() + [('Message', i)]).get_async()
-      for i in range(self.last_message+1)
-    ]
-    for f in message_futures:
-      try:
-        ret.append((yield f))
-      except exceptions.Forbidden:
-        pass
-    extra = self.added_messages
-    self.added_messages = None
-    raise ndb.Return(ret + extra)
+    return limit_entities_async('Message', self.key, self.last_message)
 
-  @utils.cached_assignable_property
-  @ndb.tasklet
+  @utils.cached_property
   def patchsets_async(self):  # pylint: disable=E0202
-    ret = []
-    patchset_futures = [
-      ndb.Key(pairs=self.key.pairs() + [('Patchset', i)]).get_async()
-      for i in range(self.last_patchset+1)
-    ]
-    for f in patchset_futures:
-      try:
-        ret.append((yield f))
-      except exceptions.Forbidden:
-        pass
-    extra = self.added_patchsets
-    self.added_patchsets = None
-    raise ndb.Return(ret + extra)
+    return limit_entities_async('Patchset', self.key, self.last_patchset)
 
   @classmethod
   def metadata_key(cls, issue_key):
@@ -310,15 +291,12 @@ class Issue(mixins.HideableModelMixin):
 
   @ndb.tasklet
   def add_patchset_async(self, cas_id, message=None):
-    self.last_patchset += 1
-    ps = Patchset(id=self.last_patchset, message=message, data_ref=cas_id,
+    ps = Patchset(id=self.last_patchset+1, message=message, data_ref=cas_id,
                   parent=self.key)
+    self.last_patchset += 1
     self.n_patchsets += 1
     yield ps.mark_async()
-    lst = self.added_patchsets
-    if lst is None:
-      lst = self.patchsets_async.get_result()
-    lst.append(ps)
+    (yield self.patchsets_async).append(ps)
     yield self.set_notification_async('patchset.create', ps.key)
     raise ndb.Return(ps)
 
@@ -332,9 +310,8 @@ class Issue(mixins.HideableModelMixin):
   def add_message_async(self, body='', subject=None, drafts=None):
     if subject is None:
       subject = self.subject
-    self.last_message += 1
     m = Message(
-      id=self.last_message, body=body, subject=subject,
+      id=self.last_message+1, body=body, subject=subject,
       recipients=self.viewers
     )
     # TODO(iannucci): Double-check all upper/lowercase email matching.
@@ -344,6 +321,7 @@ class Issue(mixins.HideableModelMixin):
       self.approval_status[m.sender] = False
     elif m.approval:
       self.approval_status[m.sender] = True
+    self.last_message += 1
     self.n_messages += 1
     self.n_comments += drafts
 
@@ -355,10 +333,7 @@ class Issue(mixins.HideableModelMixin):
       guts.pop('created', None)
       to_wait.append(ps.add_comment_async(guts))
     yield to_wait
-    lst = self.added_messages
-    if lst is None:
-      lst = self.messages_async.get_result()
-    lst.append(m)
+    (yield self.messages_async).append(m)
     yield self.set_notification_async('message.create', m.key)
     raise ndb.Return(m)
 
@@ -398,6 +373,16 @@ class Issue(mixins.HideableModelMixin):
   def can_update(self):
     cur_user = account.get_current_user()
     return cur_user and cur_user.email() in self.editors
+
+  #### Model overrides
+  def to_dict(self, include=None, exclude=None):
+    exclude = set(exclude or ())
+    exclude.update((
+      'hidden', 'last_message', 'last_patchset', 'notifications'
+    ))
+    r = super(Issue, self).to_dict(include=include, exclude=exclude)
+    r['id'] = self.key.id()
+    return r
 
 
 class Comment(ndb.Model):
@@ -507,6 +492,19 @@ class Patchset(mixins.HideableModelMixin):
   def can_read(self):
     return (super(Patchset, self).can_read() and
             self.root_async.get_result().can('read'))
+
+  #### Model overrides
+  def to_dict(self, include=None, exclude=None):
+    exclude = set(exclude or ())
+    exclude.add('hidden')
+    exclude.add('raw_comments')
+    r = super(Patchset, self).to_dict(include, exclude)
+    r['id'] = self.key.id()
+    if not include or 'comments' in include:
+      r['comments'] = [c.to_dict() for c in self.comments]
+    if not include or 'data_ref' in include:
+      r['data_ref'] = self.data_ref.to_dict()
+    return r
 
 
 class Message(authed_model.AuthedModel):
