@@ -26,21 +26,6 @@ from .common import API_PREFIX
 
 STATUS_CODE = middleware.STATUS_CODE
 
-@ndb.non_transactional
-@ndb.tasklet
-def ownership_proof(pset_cas_id, proofs):
-  if pset_cas_id.content_type != issue_models.PATCHSET_TYPE:
-    raise exceptions.BadData('Patchset must have datatype %r'
-                              % issue_models.PATCHSET_TYPE)
-  pset = yield pset_cas_id.data_async()
-  for cas_entry in (yield [x.entry_async() for x in pset.CAS_REFERENCES]):
-    csum = cas_entry.cas_id.csum
-    # TODO(iannucci): This could be parallelized if prove_ownership was async
-    if not cas_entry.prove_ownership(proofs[csum]):
-      raise exceptions.Forbidden(
-        'add patchset due to insufficient proof for %s' % csum)
-
-
 class Issues(rest_handler.RESTCollectionHandler,
              rest_handler.QueryableCollectionMixin):
   PREFIX = API_PREFIX
@@ -51,7 +36,7 @@ class Issues(rest_handler.RESTCollectionHandler,
   @ndb.transactional_tasklet
   def post(self, _key, send_message=False, patchset=None, proofs=None, **data):
     pset_cas_id = cas.models.CAS_ID.from_dict(patchset)
-    ownership_proof_fut = ownership_proof(pset_cas_id, proofs)
+    ownership_proof_fut = pset_cas_id.prove_async(proofs, 'create issue')
 
     issue = yield issue_models.Issue.create_async(**data)
     if not issue.cc and not issue.reviewers and send_message:
@@ -71,8 +56,7 @@ class Issues(rest_handler.RESTCollectionHandler,
     # as if it's already collected.  This could probably be implemented in
     # CASEntry itself.
     yield [
-      ownership_proof_fut,
-      issue.add_patchset_async(pset_cas_id),
+      issue.add_patchset_async(ownership_proof_fut),
       issue.add_message_async() if send_message else utils.NONE_FUTURE
     ]
 
@@ -128,11 +112,9 @@ class Patchsets(rest_handler.RESTCollectionHandler):
   @ndb.transactional_tasklet
   def post(self, key, patchset=None, message=None, proofs=None):
     pset_cas_id = cas.models.CAS_ID.from_dict(patchset)
-    issue, _ = yield [
-      key.parent().get_async(),
-      ownership_proof(pset_cas_id, proofs)
-    ]
-    ps = yield issue.add_patchset_async(pset_cas_id, message=message)
+    ownership_proof_fut = pset_cas_id.prove_async(proofs, 'add patchset')
+    issue, _ = yield key.parent().get_async()
+    ps = yield issue.add_patchset_async(ownership_proof_fut, message=message)
     yield issue.flush_to_ds_async()
     raise ndb.Return({STATUS_CODE: 201, 'data': ps.to_dict()})
 

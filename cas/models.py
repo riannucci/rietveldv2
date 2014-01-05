@@ -107,6 +107,9 @@ class CAS_ID(object):
     assert isinstance(charset, (basestring, type(None)))
     self.charset = charset.lower() if charset else None
 
+    self.children_proven = False
+    self.proven = False
+
   @classmethod
   def from_string(cls, string_id):
     match = cls.REGEX.match(string_id)
@@ -221,6 +224,27 @@ class CAS_ID(object):
 
     return type_map.validate_async(data, self.content_type, self.charset,
                                    check_refs)
+
+  @ndb.non_transactional
+  @ndb.tasklet
+  def prove_async(self, proofs, action, include_self=False):
+    if include_self:
+      data, entry = yield (self.data_async(), self.entry_async())
+      refs = [x.entry_async() for x in data.CAS_REFERENCES] + [entry]
+    else:
+      data = yield self.data_async()
+      refs = [x.entry_async() for x in data.CAS_REFERENCES]
+
+    for cas_entry in (yield refs):
+      csum = cas_entry.cas_id.csum
+      # TODO(iannucci): This could be parallelized if prove_ownership was async
+      if not cas_entry.prove_ownership(proofs[csum]):
+        raise exceptions.Forbidden(
+          '%s due to insufficient proof for %s' % (action, csum))
+
+    self.children_proven = True
+    self.proven = include_self
+    raise ndb.Return(self)
 
   #### Output conversion
   @utils.cached_property

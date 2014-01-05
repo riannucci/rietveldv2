@@ -291,7 +291,12 @@ class Issue(mixins.HideableModelMixin, query_parser.StringQueryMixin):
     no_extra(data)
 
   @ndb.tasklet
-  def add_patchset_async(self, cas_id, message=None):
+  def add_patchset_async(self, cas_id_fut, message=None):
+    cas_id = yield cas_id_fut
+    assert cas_id.children_proven == True
+    if cas_id.content_type != PATCHSET_TYPE:
+      raise exceptions.BadData('Patchset must have datatype %r'
+                               % PATCHSET_TYPE)
     ps = Patchset(id=self.last_patchset+1, message=message, data_ref=cas_id,
                   parent=self.key)
     self.last_patchset += 1
