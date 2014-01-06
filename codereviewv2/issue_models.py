@@ -15,7 +15,7 @@
 import json
 import re
 
-from google.appengine.api import taskqueue, users, mail
+from google.appengine.api import taskqueue, mail
 from google.appengine.ext import ndb
 from google.appengine.ext.ndb import metadata
 
@@ -284,9 +284,9 @@ class Issue(mixins.HideableModelMixin, query_parser.StringQueryMixin):
           raise ndb.Return(True)
       raise ndb.Return(False)
 
-    reviewers, cc, description = yield [
-      _apply('reviewers', lambda vals: map(users.User, vals)),
-      _apply('cc', lambda vals: map(users.User, vals)),
+    reviewers, cc, description, _ = yield [
+      _apply('reviewers'),
+      _apply('cc'),
       _apply('description'),
       [_apply('subject'), _apply('private'), _apply('closed')]
     ]

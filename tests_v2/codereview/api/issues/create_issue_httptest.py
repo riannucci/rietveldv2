@@ -110,6 +110,9 @@ def Execute(api):
 
   api.GET('issues/%d' % iid)
 
+  api.PUT('issues/%d' % iid, json={'cc': ['coolguy@FancyDomain.co.uk']},
+          xsrf=xsrf)
+
   api.GET('issues/%d/patchsets' % iid)
 
   api.GET('issues/%d/patchsets/1' % iid)

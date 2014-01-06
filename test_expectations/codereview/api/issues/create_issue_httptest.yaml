@@ -108,6 +108,34 @@
       status:
         code: 200
         type: OK
+- request: PUT 'codereview/api/v2/issues/5629499534213120'
+  response:
+    code: 200
+    json:
+      data:
+        VERSION: 2
+        approval_status: null
+        cc:
+        - coolguy@fancydomain.co.uk
+        closed: false
+        created: '2013-12-27 02:25:36.612107'
+        description: 'A totes awesome haiku
+
+
+          Seriously, it''s freaking sweet.'
+        id: 5629499534213120
+        modified: '2013-12-27 02:26:35.061705'
+        n_comments: 0
+        n_messages: 0
+        n_patchsets: 1
+        owner: test@example.com
+        private: false
+        reviewers:
+        - bob@gnarly.com
+        subject: A totes awesome haiku
+      status:
+        code: 200
+        type: OK
 - request: GET 'codereview/api/v2/issues/5629499534213120/patchsets'
   response:
     code: 200

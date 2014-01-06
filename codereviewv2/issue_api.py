@@ -74,14 +74,13 @@ class Issues(rest_handler.RESTCollectionHandler,
     issue = yield key.get_async()
     yield issue.update_async(**data)
     yield issue.flush_to_ds_async()
-    raise ndb.Return({})
+    raise ndb.Return(issue.to_dict())
 
   @ndb.transactional_tasklet
   def delete_one(self, key):
     issue = yield key.get_async()
     yield issue.delete_async(key)
     yield issue.flush_to_ds_async()
-    raise ndb.Return({})
 
 
 class Drafts(rest_handler.RESTCollectionHandler):
@@ -134,7 +133,6 @@ class Patchsets(rest_handler.RESTCollectionHandler):
     issue, ps = yield key.parent().get_async(), key.get_async()
     yield issue.del_patchset_async(ps)
     yield issue.flush_to_ds_async()
-    raise ndb.Return({})
 
   @classmethod
   def _full_diff_generator(cls, patches, mode):
