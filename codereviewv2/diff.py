@@ -14,38 +14,13 @@
 
 import difflib
 import types
-import collections
-import hashlib
 
 from google.appengine.ext import ndb
 
 from framework import utils
 
 
-class LazyLineSplitter(collections.Sequence):
-  def __init__(self, data, lineending):
-    self._data = data
-    self._offsets = []
-
-    start = 0
-    end = None
-    while start < len(data):
-      end = data.find(lineending, start)
-      if end == -1:
-        self._offsets.append((start, len(data)))
-        break
-      self._offsets.append(start, end)
-      start = end + len(lineending)
-
-  def __getitem__(self, idx):
-    start, stop = self._offsets[idx]
-    return self._data[start:stop]
-
-  def __len__(self):
-    return len(self._offsets)
-
-
-class Diffable(object):
+class Diffable(object):  # pylint: disable=R0921
   def __init__(self, path, timestamp, mode, lineending):
     self.path = path
     self.timestamp = timestamp
@@ -61,7 +36,8 @@ class Diffable(object):
 
   @utils.cached_property
   def lines(self):
-    return LazyLineSplitter(self.data_async.get_result(), self.lineending)
+    return utils.LazyLineSplitter(self.data_async.get_result(),
+                                  self.lineending)
 
   @utils.cached_property
   def size(self):
@@ -70,9 +46,7 @@ class Diffable(object):
   @utils.cached_property
   @ndb.tasklet
   def git_csum_async(self):
-    r = hashlib.sha1('blob %d\0' % self.size)
-    r.update((yield self.data_async))
-    raise ndb.Return(r.hexdigest())
+    raise NotImplementedError()
 
   def to_dict(self):
     return {
@@ -132,14 +106,14 @@ class DiffablePair(object):
       yield "@@ -%d,%d +%d,%d @@%s" % (i1+1, i2-i1, j1+1, j2-j1, nl)
       for tag, i1, i2, j1, j2 in group:
         if tag == 'equal':
-          for line in old.data[i1:i2]:
+          for line in self.old.lines[i1:i2]:
             yield ' ' + line
           continue
         if tag == 'replace' or tag == 'delete':
-          for line in old.data[i1:i2]:
+          for line in self.old.lines[i1:i2]:
             yield '-' + line
         if tag == 'replace' or tag == 'insert':
-          for line in new.data[j1:j2]:
+          for line in self.new.lines[j1:j2]:
             yield '+' + line
 
   def generate_diff(self, mode, **kwargs):
@@ -183,36 +157,42 @@ class DiffablePair(object):
     seq_matcher = difflib.SequenceMatcher(None, self.old.lines, self.new.lines)
     old, new = self.old, self.new
 
+    old_csum = old.git_csum_async.get_result()
+    new_csum = new.git_csum_async.get_result()
+
     if self.action == 'modify':
-      yield 'diff --git a/%s b/%s' % (old.path, new.path)
-      if old.mode == new.mode:
+      yield 'diff --git a/%s b/%s%s' % (old.path, new.path, nl)
+      if old.mode != new.mode:
         yield 'old mode %06o%s' % (old.mode, nl)
         yield 'new mode %06o%s' % (new.mode, nl)
-        yield 'index %s..%s%s' % (old.csum, new.csum, nl)
+        yield 'index %s..%s%s' % (old_csum, new_csum, nl)
       else:
-        yield 'index %s..%s %s%s' % (old.csum, new.csum, old.mode, nl)
+        yield 'index %s..%s %s%s' % (old_csum, new_csum, old.mode, nl)
 
     elif self.action == 'add':
-      yield 'diff --git a/%s b/%s' % (new.path, new.path)
+      yield 'diff --git a/%s b/%s%s' % (new.path, new.path, nl)
       yield 'new file mode %06o%s' % (new.mode, nl)
-      yield 'index %s..%s%s' % ('0'*40, new.csum, nl)
+      yield 'index %s..%s%s' % ('0'*40, new_csum, nl)
 
     elif self.action == 'delete':
-      yield 'diff --git a/%s b/%s' % (old.path, old.path)
+      yield 'diff --git a/%s b/%s%s' % (old.path, old.path, nl)
       yield 'deleted file mode %06o%s' % (old.mode, nl)
-      yield 'index %s..%s%s' % (old.csum, '0'*40, nl)
+      yield 'index %s..%s%s' % (old_csum, '0'*40, nl)
 
     elif self.action in ('copy', 'rename'):
-      yield 'diff --git a/%s b/%s' % (old.path, new.path)
-      if old.mode == new.mode:
+      yield 'diff --git a/%s b/%s%s' % (old.path, new.path, nl)
+      if old.mode != new.mode:
         yield 'old mode %06o%s' % (old.mode, nl)
         yield 'new mode %06o%s' % (new.mode, nl)
       similarity = seq_matcher.ratio()
-      yield 'similarity index %d%%' % (similarity * 100)
+      yield 'similarity index %d%%%s' % (similarity * 100, nl)
       yield '%s from %s%s' % (self.action, old.path, nl)
       yield '%s to %s%s' % (self.action, new.path, nl)
       if similarity < 1.0:
-        yield 'index %s..%s%s' % (old.csum, new.csum, nl)
+        if old.mode != new.mode:
+          yield 'index %s..%s%s' % (old_csum, new_csum, nl)
+        else:
+          yield 'index %s..%s %06o%s' % (old_csum, new_csum, old.mode, nl)
       else:
         return
 

@@ -33,10 +33,22 @@ def cas_id(data, content_type='text/plain', charset='utf-8'):
     r['charset'] = charset
   return r
 
+def cas_id_str(cas_id):
+  ret = '%(csum)s:%(size)d:%(content_type)s' % cas_id
+  if 'charset' in cas_id:
+    ret += ':%(charset)s' % cas_id
+  return ret
+
 def prove(xsrf, data, salt):
   salt = salt.decode('base64')
   salt_hash = hmac.new(salt, data, HASH_ALGO).digest()
   return hmac.new(xsrf, salt_hash, HASH_ALGO).hexdigest()
+
+def entry(data, cas_id):
+  return {
+    'data': data.encode('base64')[:-1],
+    'cas_id': cas_id
+  }
 
 FILE_BEFORE = """
 Waters move softly
@@ -44,63 +56,47 @@ The lake gently beckons you
 Slip into it's grave
 """
 FILE_BEFORE_CAS_ID = cas_id(FILE_BEFORE)
+FILE_BEFORE_ENTRY = entry(FILE_BEFORE, FILE_BEFORE_CAS_ID)
 
 FILE_AFTER = """
-Cloth moves softly
+Waters move softly
 The hat gently pokes you
 Put it on your face
 """
 FILE_AFTER_CAS_ID = cas_id(FILE_AFTER)
+FILE_AFTER_ENTRY = entry(FILE_AFTER, FILE_AFTER_CAS_ID)
+
+PATCHSET = json.dumps({
+  'patches': [
+    {
+      'action': 'rename',
+      'old': {
+        'data': FILE_BEFORE_CAS_ID,
+        'path': 'path/to/haiku.txt', 'mode': 0100644,
+        'timestamp': 'fake timestamp'
+      },
+      'new': {
+        'data': FILE_AFTER_CAS_ID,
+        'path': 'different/path/to/haiku.txt', 'mode': 0100644,
+        'timestamp': 'fake timestamp'
+      }
+    }
+  ]
+})
+PATCHSET_CAS_ID = cas_id(PATCHSET, 'application/patchset+json')
+PATCHSET_CAS_ID_STR = cas_id_str(PATCHSET_CAS_ID)
 
 def Execute(api):
   api.login()
   xsrf = api.GET('accounts/me').json['data']['xsrf']
 
-  patchset = json.dumps({
-    'patches': [
-      {
-        'action': 'rename',
-        'old': {
-          'data': FILE_BEFORE_CAS_ID,
-          'path': '/path/to/haiku.txt', 'mode': 100644,
-          'timestamp': 'fake timestamp'
-        },
-        'new': {
-          'data': FILE_AFTER_CAS_ID,
-          'path': '/different/path/to/haiku.txt', 'mode': 100644,
-          'timestamp': 'fake timestamp'
-        }
-      }
-    ]
-  })
-  pset_id = cas_id(patchset, 'application/patchset+json')
+  ents = api.PUT('cas_entries', json=[FILE_BEFORE_ENTRY, FILE_AFTER_ENTRY],
+                 xsrf=xsrf, compress=True).json['data']
 
-  entries = [
-    {
-      'data': FILE_BEFORE.encode('base64')[:-1],
-      'cas_id': FILE_BEFORE_CAS_ID
-    },
-    {
-      'data': FILE_AFTER.encode('base64')[:-1],
-      'cas_id': FILE_AFTER_CAS_ID
-    }
-  ]
-  rsp = api.PUT('cas_entries', json=entries, xsrf=xsrf, compress=True)
-  ents = rsp.json['data']
-
-  entries = [
-    {
-      'data': patchset.encode('base64')[:-1],
-      'cas_id': pset_id
-    }
-  ]
-  api.POST((
-    'cas_entries/%s:%s:%s:utf-8'
-    % (pset_id['csum'], pset_id['size'], pset_id['content_type'])),
-    data=patchset, xsrf=xsrf)
+  api.POST('cas_entries/%s' % PATCHSET_CAS_ID_STR, data=PATCHSET, xsrf=xsrf)
 
   issue = {
-    'patchset': pset_id,
+    'patchset': PATCHSET_CAS_ID,
     'proofs': {
       FILE_BEFORE_CAS_ID['csum']: prove(xsrf, FILE_BEFORE, ents[0]['salt']),
       FILE_AFTER_CAS_ID['csum']: prove(xsrf, FILE_AFTER, ents[1]['salt']),
@@ -117,3 +113,10 @@ def Execute(api):
   api.GET('issues/%d/patchsets' % iid)
 
   api.GET('issues/%d/patchsets/1' % iid)
+
+  api.GET('issues/%d/patchsets/1/patches' % iid)
+
+  api.GET('issues/%d/patchsets/1/patches/1' % iid)
+
+  api.GET('issues/%d/patchsets/1/patches/1/diff' % iid)
+

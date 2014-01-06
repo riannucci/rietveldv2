@@ -162,8 +162,9 @@ class Patchsets(rest_handler.RESTCollectionHandler):
 
     # TODO(iannucci): Convert to a real streaming response
     # TODO(iannucci): Cache generated diffs for some time period
-    raise ndb.Return(HttpResponse(self._full_diff_generator(patches, mode),
-                                  content_type='text/plain'))
+    raise ndb.Return(
+      HttpResponse(''.join(self._full_diff_generator(patches, mode)),
+                   content_type='text/plain'))
 
 
 class Comments(rest_handler.RESTCollectionHandler):
@@ -198,17 +199,18 @@ class Patches(rest_handler.RESTCollectionHandler):
   def get_one(self, key):
     ps = yield key.parent().get_async()
     patches = yield ps.patches_async
-    raise ndb.Return(patches[key.id()].to_dict())
+    raise ndb.Return(patches[key.id() - 1].to_dict())
 
   @ndb.tasklet
   def get_one_diff(self, key, mode='git'):
-    patchset = yield key.parent()
+    patchset = yield key.parent().get_async()
     patches = yield patchset.patches_async
-    patch = patches[key.id()]
+    patch = patches[key.id() - 1]
     # TODO(iannucci): Convert to a real streaming response
     # TODO(iannucci): Cache generated diffs for some time period
-    raise ndb.Return(HttpResponse(patch.generate_diff(mode),
-                                  content_type='text/plain'))
+    raise ndb.Return(
+      HttpResponse(''.join(patch.generate_diff(mode)),
+                   content_type='text/plain'))
 
   @ndb.tasklet
   def get_one_diff2(self, key, right_ps_id, right_p_id, mode='git'):
@@ -228,8 +230,9 @@ class Patches(rest_handler.RESTCollectionHandler):
 
     # TODO(iannucci): Convert to a real streaming response
     # TODO(iannucci): Cache generated diffs for some time period
-    raise ndb.Return(HttpResponse(fake_patch.generate_diff(mode),
-                                  content_type='text/plain'))
+    raise ndb.Return(
+      HttpResponse(''.join(fake_patch.generate_diff(mode)),
+                   content_type='text/plain'))
 
 
 class PatchComments(rest_handler.RESTCollectionHandler):
@@ -241,7 +244,7 @@ class PatchComments(rest_handler.RESTCollectionHandler):
     patch_key = key.parent()
     ps = yield patch_key.parent().get_async()
     patches = yield ps.patches_async
-    ret = [c.to_dict() for c in patches[key.id()].comments]
+    ret = [c.to_dict() for c in patches[key.id() - 1].comments]
     raise ndb.Return(ret)
 
   @ndb.tasklet

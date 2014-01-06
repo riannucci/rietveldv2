@@ -40,6 +40,35 @@ def constant_time_equals(a, b):
   return acc == 0
 
 
+class LazyLineSplitter(collections.Sequence):
+  def __init__(self, data, lineending):
+    self._data = data
+    self._offsets = []
+
+    start = 0
+    end = None
+    while start < len(data):
+      end = data.find(lineending, start)
+      if end == -1:
+        self._offsets.append((start, len(data)))
+        break
+      self._offsets.append((start, end + len(lineending)))
+      start = end + len(lineending)
+
+  @property
+  def raw_data(self):
+    return self._data
+
+  def __getitem__(self, idx):
+    if isinstance(idx, slice):
+      return [self._data[b:e] for b, e in self._offsets[idx]]
+    else:
+      return self._data[slice(*self._offsets[idx])]
+
+  def __len__(self):
+    return len(self._offsets)
+
+
 class IdentitySet(collections.MutableSet):
   # pylint thinks we should implement __getitem__
   # pylint: disable=R0924

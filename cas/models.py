@@ -67,6 +67,8 @@ class CASEntry(ndb.Model):
   salt = ndb.BlobProperty()
   salt_hash = ndb.BlobProperty()
 
+  git_hash = ndb.BlobProperty()
+
   @utils.cached_property
   def cas_id(self):  # pylint: disable=E0202
     return CAS_ID.from_key(self.key)
@@ -158,10 +160,13 @@ class CAS_ID(object):
       # a CASEntry when it's ripe.
       yield self.verify_async(data, type_map)
 
-      # TODO(iannucci): async version of hmac/checksum
+      # TODO(iannucci): async versions of hmac/checksum
       salt_hash = hmac.new(salt, data, self.HASH_ALGO)
+      git_hash = hashlib.sha1('blob %d\0' % len(data))
+      git_hash.update(data)
 
-      entry = CASEntry(key=self.key, salt=salt, salt_hash=salt_hash.digest())
+      entry = CASEntry(key=self.key, salt=salt, salt_hash=salt_hash.digest(),
+                       git_hash=git_hash.digest())
 
       yield [
         entry.put_async(),

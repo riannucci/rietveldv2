@@ -35,22 +35,22 @@
         size: 69
       - charset: utf-8
         content_type: text/plain
-        csum: d253b570ee4eed05389e17a10d13b4c9e7f70e1af18ae08c2e347da157caa6f2
+        csum: 0025c5f4a339c0a99a3a15a286c02bb3f9ba801166c3699e913c34b3c765f6c9
         salt: gyrSpgkHriU3GgE6SJwYkHMp1OouC0BR/krV5Bo3KwI=
         size: 65
       status:
         code: 200
         type: OK
-- request: POST 'codereview/api/v2/cas_entries/cc076952aadf9da5c880d055448a309c7ca2b5662d5ac291ca9c5595427caffd:513:application/patchset+json:utf-8'
+- request: POST 'codereview/api/v2/cas_entries/3844064d4b539405aa865e15aa232d21d94e8b02861552cedbad6a79faf9188c:509:application/patchset+json:utf-8'
   response:
     code: 200
     json:
       data:
         charset: utf-8
         content_type: application/patchset+json
-        csum: cc076952aadf9da5c880d055448a309c7ca2b5662d5ac291ca9c5595427caffd
+        csum: 3844064d4b539405aa865e15aa232d21d94e8b02861552cedbad6a79faf9188c
         salt: 4MrZPnQO/j5i1WYGKOYLfyvagDvrZ+yXxSAGxZd9fDY=
-        size: 513
+        size: 509
       status:
         code: 200
         type: OK
@@ -119,8 +119,8 @@
         data_ref:
           charset: utf-8
           content_type: application/patchset+json
-          csum: cc076952aadf9da5c880d055448a309c7ca2b5662d5ac291ca9c5595427caffd
-          size: 513
+          csum: 3844064d4b539405aa865e15aa232d21d94e8b02861552cedbad6a79faf9188c
+          size: 509
         id: 1
         message: null
       status:
@@ -137,10 +137,95 @@
         data_ref:
           charset: utf-8
           content_type: application/patchset+json
-          csum: cc076952aadf9da5c880d055448a309c7ca2b5662d5ac291ca9c5595427caffd
-          size: 513
+          csum: 3844064d4b539405aa865e15aa232d21d94e8b02861552cedbad6a79faf9188c
+          size: 509
         id: 1
         message: null
       status:
         code: 200
         type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches'
+  response:
+    code: 200
+    json:
+      data:
+      - action: rename
+        comments: []
+        id: 1
+        new:
+          data:
+            charset: utf-8
+            content_type: text/plain
+            csum: 0025c5f4a339c0a99a3a15a286c02bb3f9ba801166c3699e913c34b3c765f6c9
+            size: 65
+          mode: 33188
+          path: different/path/to/haiku.txt
+          timestamp: fake timestamp
+        next: null
+        next_with_comment: null
+        old:
+          data:
+            charset: utf-8
+            content_type: text/plain
+            csum: 214cf04c429f54b3f5398b9b7c767d49ad4489c9f09b235617db1286e5a403b9
+            size: 69
+          mode: 33188
+          path: path/to/haiku.txt
+          timestamp: fake timestamp
+        prev: null
+        prev_with_comment: null
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1'
+  response:
+    code: 200
+    json:
+      data:
+        action: rename
+        comments: []
+        id: 1
+        new:
+          data:
+            charset: utf-8
+            content_type: text/plain
+            csum: 0025c5f4a339c0a99a3a15a286c02bb3f9ba801166c3699e913c34b3c765f6c9
+            size: 65
+          mode: 33188
+          path: different/path/to/haiku.txt
+          timestamp: fake timestamp
+        next: null
+        next_with_comment: null
+        old:
+          data:
+            charset: utf-8
+            content_type: text/plain
+            csum: 214cf04c429f54b3f5398b9b7c767d49ad4489c9f09b235617db1286e5a403b9
+            size: 69
+          mode: 33188
+          path: path/to/haiku.txt
+          timestamp: fake timestamp
+        prev: null
+        prev_with_comment: null
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/diff'
+  response:
+    code: 200
+    raw:
+    - diff --git a/path/to/haiku.txt b/different/path/to/haiku.txt
+    - similarity index 50%
+    - rename from path/to/haiku.txt
+    - rename to different/path/to/haiku.txt
+    - index a049b14093aa39f098039262e72be845a1355107..2c1190497106feb4cf1f14aedc9aa4326375954f
+      100644
+    - '--- a/path/to/haiku.txt fake timestamp'
+    - +++ b/different/path/to/haiku.txt fake timestamp
+    - '@@ -1,4 +1,4 @@'
+    - ' '
+    - ' Waters move softly'
+    - -The lake gently beckons you
+    - -Slip into it's grave
+    - +The hat gently pokes you
+    - +Put it on your face

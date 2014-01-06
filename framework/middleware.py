@@ -128,6 +128,7 @@ class JSONResponseMiddleware(Middleware):
     result = result or {}
     if isinstance(result, HttpResponse):
       return result
+
     if not isinstance(result, dict):
       result = {'data': result}
     headers = result.pop(HEADERS, {})

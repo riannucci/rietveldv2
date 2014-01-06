@@ -14,6 +14,8 @@
 
 from . import types
 
+from framework import utils
+
 
 TYPE_MAP = types.CASTypeRegistry()
 
@@ -30,9 +32,10 @@ def charset_ascii(data):
 
 @TYPE_MAP('text/plain', require_charset=('ascii', 'utf-8'))
 def text_plain(data):
-  lines = data.split('\n')
-  assert all(len(l) <= 300 for l in lines)
-  return lines
+  # TODO(iannucci): Support more than one line ending type?
+  splitter = utils.LazyLineSplitter(data, '\n')
+  assert all(len(l) <= 300 for l in splitter)
+  return data
 
 
 @TYPE_MAP('image/gif')

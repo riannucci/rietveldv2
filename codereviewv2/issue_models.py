@@ -63,7 +63,7 @@ class Content(diff.Diffable):
     assert not content
     assert not self.PATH_RE.search(path)
     # TODO(iannucci): Support symlinks and gitlinks?
-    assert mode in (100755, 100644)
+    assert mode in (0100755, 0100644)
 
     # TODO(iannucci): Support variable line endings depending on the
     lineending = '\n' if data.content_type.startswith('text/') else None
@@ -77,6 +77,12 @@ class Content(diff.Diffable):
   @utils.cached_property
   def size(self):
     return self.cas_id.size
+
+  @utils.cached_property
+  @ndb.tasklet
+  def git_csum_async(self):
+    entry = yield self.cas_id.entry_async()
+    raise ndb.Return(entry.git_hash.encode('hex'))
 
   def to_dict(self):
     r = super(Content, self).to_dict()
@@ -105,7 +111,8 @@ class Patch(diff.DiffablePair):
     self.prev_with_comment = None
 
   def get_data_futures(self):
-    return [self.old.data_async, self.new.data_async]
+    return [self.old.data_async, self.new.data_async,
+            self.old.git_csum_async, self.new.git_csum_async]
 
   @utils.cached_property
   def size(self):
@@ -161,7 +168,7 @@ def patchset_json(data):
   assert ['patches'] == parsed.keys()
   assert parsed['patches']
   raise ndb.Return(
-    PatchList(Patch.from_dict(i, p) for i, p in enumerate(parsed['patches'])))
+    PatchList(Patch.from_dict(i+1, p) for i, p in enumerate(parsed['patches'])))
 
 
 def no_extra(data):
