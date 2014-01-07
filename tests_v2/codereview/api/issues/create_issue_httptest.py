@@ -123,3 +123,16 @@ def Execute(api):
 
   api.GET('issues/%d/patchsets/1/patches/1/diff' % iid)
 
+  api.DELETE('issues/%d/patchsets/1' % iid, xsrf=xsrf)
+
+  api.GET('issues/%d/patchsets/1' % iid)
+
+  api.GET('issues/%d/patchsets/1/patches/1' % iid)
+
+  api.DELETE('issues/%d' % iid, xsrf=xsrf)
+
+  api.GET('issues/%d' % iid)
+  api.comment('Deleted issues should yield the same error as issues which '
+              'never existed in the first place.')
+
+  api.GET('issues/%d' % (iid + 1))

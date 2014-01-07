@@ -257,3 +257,58 @@
     - -Slip into it's grave
     - +The hat gently pokes you
     - +Put it on your face
+- request: DELETE 'codereview/api/v2/issues/5629499534213120/patchsets/1'
+  response:
+    code: 200
+    json:
+      data: null
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1'
+  response:
+    code: 404
+    json:
+      data:
+        msg: Key('Issue', 5629499534213120, 'Patchset', 1) was not found.
+      status:
+        code: 404
+        type: ERROR
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1'
+  response:
+    code: 404
+    json:
+      data:
+        msg: Key('Issue', 5629499534213120, 'Patchset', 1) was not found.
+      status:
+        code: 404
+        type: ERROR
+- request: DELETE 'codereview/api/v2/issues/5629499534213120'
+  response:
+    code: 200
+    json:
+      data: null
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120'
+  response:
+    code: 404
+    comments:
+    - Deleted issues should yield the same error as issues which never existed in
+      the first place.
+    json:
+      data:
+        msg: Key('Issue', 5629499534213120) was not found.
+      status:
+        code: 404
+        type: ERROR
+- request: GET 'codereview/api/v2/issues/5629499534213121'
+  response:
+    code: 404
+    json:
+      data:
+        msg: Key('Issue', 5629499534213121) was not found.
+      status:
+        code: 404
+        type: ERROR

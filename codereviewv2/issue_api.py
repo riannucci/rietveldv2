@@ -26,6 +26,15 @@ from .common import API_PREFIX
 
 STATUS_CODE = middleware.STATUS_CODE
 
+
+@ndb.tasklet
+def safe_get(key):
+  ent = yield key.get_async()
+  if ent is None:
+    raise exceptions.NotFound(key)
+  raise ndb.Return(ent)
+
+
 class Issues(rest_handler.RESTCollectionHandler,
              rest_handler.QueryableCollectionMixin):
   PREFIX = API_PREFIX
@@ -65,21 +74,21 @@ class Issues(rest_handler.RESTCollectionHandler,
 
   @ndb.tasklet
   def get_one(self, key):
-    ent = yield key.get_async()
+    ent = yield safe_get(key)
     raise ndb.Return(ent.to_dict())
 
   # TODO(iannucci): Make this operation idempotent
   @ndb.transactional_tasklet
   def put_one(self, key, **data):
-    issue = yield key.get_async()
+    issue = yield safe_get(key)
     yield issue.update_async(**data)
     yield issue.flush_to_ds_async()
     raise ndb.Return(issue.to_dict())
 
   @ndb.transactional_tasklet
   def delete_one(self, key):
-    issue = yield key.get_async()
-    yield issue.delete_async(key)
+    issue = yield safe_get(key)
+    yield issue.delete_async()
     yield issue.flush_to_ds_async()
 
 
@@ -89,13 +98,13 @@ class Drafts(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get(self, key):
     metadata_key = issue_models.Issue.metadata_key(key.parent())
-    metadata = yield metadata_key.get_async()
+    metadata = yield safe_get(metadata_key)
     raise ndb.Return([d.to_dict() for d in metadata.drafts])
 
   @ndb.tasklet
   def get_one(self, key):
     metadata_key = issue_models.Issue.metadata_key(key.parent())
-    metadata = yield metadata_key.get_async()
+    metadata = yield safe_get(metadata_key)
     raise ndb.Return(metadata.drafts[key.id()].to_dict())
 
 
@@ -112,25 +121,25 @@ class Patchsets(rest_handler.RESTCollectionHandler):
   def post(self, key, patchset=None, message=None, proofs=None):
     pset_cas_id = cas.models.CAS_ID.from_dict(patchset)
     ownership_proof_fut = pset_cas_id.prove_async(proofs, 'add patchset')
-    issue, _ = yield key.parent().get_async()
+    issue, _ = yield safe_get(key.parent())
     ps = yield issue.add_patchset_async(ownership_proof_fut, message=message)
     yield issue.flush_to_ds_async()
     raise ndb.Return({STATUS_CODE: 201, 'data': ps.to_dict()})
 
   @ndb.tasklet
   def get(self, key):
-    issue = yield key.parent().get_async()
+    issue = yield safe_get(key.parent())
     psets = [x.to_dict() for x in (yield issue.patchsets_async)]
     raise ndb.Return(psets)
 
   @ndb.tasklet
   def get_one(self, key):
-    ent = yield key.get_async()
+    ent = yield safe_get(key)
     raise ndb.Return(ent.to_dict())
 
   @ndb.transactional_tasklet
   def delete_one(self, key):
-    issue, ps = yield key.parent().get_async(), key.get_async()
+    issue, ps = yield safe_get(key.parent()), safe_get(key)
     yield issue.del_patchset_async(ps)
     yield issue.flush_to_ds_async()
 
@@ -151,7 +160,7 @@ class Patchsets(rest_handler.RESTCollectionHandler):
 
   @ndb.tasklet
   def get_one_diff(self, key, mode='git'):
-    patchset = yield key.get_async()
+    patchset = yield safe_get(key)
     patches = collections.deque((yield patchset.patches_async))
 
     # clear out the cached future, since the patchset will linger in the
@@ -170,13 +179,13 @@ class Comments(rest_handler.RESTCollectionHandler):
 
   @ndb.tasklet
   def get(self, key):
-    ps = yield key.parent().get_async()
+    ps = yield safe_get(key.parent())
     ret = [c.to_dict() for c in ps.comments]
     raise ndb.Return(ret)
 
   @ndb.tasklet
   def get_one(self, key):
-    ps = yield key.parent().get_async()
+    ps = yield safe_get(key.parent())
     raise ndb.Return(ps.comments[key.id()].to_dict())
 
 
@@ -190,18 +199,18 @@ class Patches(rest_handler.RESTCollectionHandler):
 
   @ndb.tasklet
   def get(self, key):
-    ps = yield key.parent().get_async()
+    ps = yield safe_get(key.parent())
     raise ndb.Return([p.to_dict() for p in (yield ps.patches_async)])
 
   @ndb.tasklet
   def get_one(self, key):
-    ps = yield key.parent().get_async()
+    ps = yield safe_get(key.parent())
     patches = yield ps.patches_async
     raise ndb.Return(patches[key.id() - 1].to_dict())
 
   @ndb.tasklet
   def get_one_diff(self, key, mode='git'):
-    patchset = yield key.parent().get_async()
+    patchset = yield safe_get(key.parent())
     patches = yield patchset.patches_async
     patch = patches[key.id() - 1]
     # TODO(iannucci): Convert to a real streaming response
@@ -216,8 +225,8 @@ class Patches(rest_handler.RESTCollectionHandler):
     right_key = ndb.Key(pairs=issue_key.pairs() + [('Patchset', right_ps_id)])
 
     left_patchset, right_patchset = yield [
-      key.parent().get_async(),
-      right_key.get_async()
+      safe_get(key.parent()),
+      safe_get(right_key)
     ]
     left_patches, right_patches = yield [
       left_patchset.patches_async,
@@ -240,17 +249,17 @@ class PatchComments(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get(self, key):
     patch_key = key.parent()
-    ps = yield patch_key.parent().get_async()
+    ps = yield safe_get(patch_key.parent())
     patches = yield ps.patches_async
     ret = [c.to_dict() for c in patches[key.id() - 1].comments]
     raise ndb.Return(ret)
 
   @ndb.tasklet
   def get_one(self, key, **data):
-    comments = yield self.get_async(key, **data)
+    comments = yield self.get(key, **data)
     ret = next((x for x in comments if x['id'] == key.id()), None)
     if not ret or ret['patch'] != key.parent().id():
-      raise exceptions.NotFound('Comment')
+      raise exceptions.NotFound(key)
     raise ndb.Return(ret.to_dict())
 
 
@@ -263,7 +272,7 @@ class PatchDrafts(rest_handler.RESTCollectionHandler):
     patch_key = key.parent()
     patchset_key = patch_key.parent()
     metadata_key = issue_models.Issue.metadata_key(patchset_key.parent())
-    metadata = yield metadata_key.get_async()
+    metadata = yield safe_get(metadata_key)
     ret = []
     for draft in metadata.drafts:
       if draft.patchset != patchset_key.id() or draft.patch != patch_key.id():
@@ -273,15 +282,15 @@ class PatchDrafts(rest_handler.RESTCollectionHandler):
 
   @ndb.tasklet
   def get_one(self, key, **data):
-    drafts = yield self.get_async(key, **data)
+    drafts = yield self.get(key, **data)
     ret = next((x for x in drafts if x['id'] == key.id()), None)
     if not ret:
-      raise exceptions.NotFound('Draft')
+      raise exceptions.NotFound(key)
     raise ndb.Return({'data': ret})
 
   def post(self, key, draft):
     issue_key = key.parent().parent()
-    mdata_key = issue_models.Issue.metadata_key(issue_key).get_async()
+    mdata_key = safe_get(issue_models.Issue.metadata_key(issue_key))
     return issue_models.IssueMetadata.update_async(mdata_key, [draft])
 
 
@@ -292,8 +301,8 @@ class Messages(rest_handler.RESTCollectionHandler):
   def post(self, key, message='', subject='', send_message=True):
     issue_key = key.parent()
     issue, metadata = yield [
-      issue_key.get_async(),
-      issue_models.Issue.metadata_key(issue_key).get_async(),
+      safe_get(issue_key),
+      safe_get(issue_models.Issue.metadata_key(issue_key)),
     ]
     drafts = metadata.drafts
     del metadata.drafts
@@ -307,8 +316,8 @@ class Messages(rest_handler.RESTCollectionHandler):
     raise ndb.Return({STATUS_CODE: 201, 'id': msg.key.id()})
 
   def get(self, key):
-    issue = yield key.parent().get_async()
+    issue = yield safe_get(key.parent())
     raise ndb.Return([m.to_dict() for m in (yield issue.messages_async)])
 
   def get_one(self, key):
-    raise ndb.Return((yield key.get_async()).to_dict())
+    raise ndb.Return((yield safe_get(key)).to_dict())

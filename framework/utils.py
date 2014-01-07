@@ -184,9 +184,6 @@ class _cached_assignable_property(object):
     field_name (str, optional) - The name of the attribute to cache data on.
       Normally field_name is simply the name of the decorated function prefixed
       with an underscore.
-    set_callback (fn(inst, val), optional) - A function which will be called
-      with your instance and the value which is being assigned to this field.
-      Return value is ignored.
 
   >>> class Test(object):
   ...  @cached_assignable_property('tarply')
@@ -211,9 +208,8 @@ class _cached_assignable_property(object):
   10
   >>>
   """
-  def __init__(self, fn, field_name=None, set_callback=None):
+  def __init__(self, fn, field_name=None):
     self.func = fn
-    self.set_callback = set_callback
     self._iname = field_name or ("_" + fn.__name__)
     self.__name__ = fn.__name__
     self.__doc__ = fn.__doc__
@@ -244,8 +240,6 @@ class _cached_assignable_property(object):
       logging.warn("Setting %s.%s more than once.\n%s", inst, self.__name__,
                    self._last_frames(4))
     setattr(inst, self._iname, val)
-    if self.set_callback:
-      self.set_callback(inst, val)
 
   def __delete__(self, inst):
     if hasattr(inst, self._iname):

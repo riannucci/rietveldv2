@@ -24,6 +24,8 @@ import cas
 from framework import (utils, mixins, exceptions, authed_model, account,
                        query_parser)
 
+from framework.monkeypatch import fix_ndb_hook_context  # pylint: disable=W0611
+
 from . import auth_models, diff
 
 PATCHSET_TYPE = 'application/patchset+json'
@@ -39,7 +41,7 @@ def limit_entities_async(model_name, base_key, limit):
   for f in futures:
     try:
       ret.append((yield f))
-    except exceptions.Forbidden:
+    except exceptions.NotFound:
       pass
   raise ndb.Return(ret)
 
@@ -176,7 +178,8 @@ def no_extra(data):
     raise exceptions.BadData('Got extra data: %r' % (data,))
 
 
-class Issue(mixins.HideableModelMixin, query_parser.StringQueryMixin):
+class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
+            query_parser.StringQueryMixin):
   # Old Issue models won't have a VERSION field at all
   VERSION = ndb.IntegerProperty(default=2, indexed=False)
 
@@ -374,13 +377,10 @@ class Issue(mixins.HideableModelMixin, query_parser.StringQueryMixin):
     return account.get_current_user() is not None
 
   def can_read(self):
-    ret = super(Issue, self).can_read()
-    if ret:
-      if self.private:
-        cur_user = account.get_current_user()
-        ret = cur_user and cur_user.email() in self.viewers
-      else:
-        ret = True
+    ret = True
+    if self.private:
+      cur_user = account.get_current_user()
+      ret = cur_user and cur_user.email() in self.viewers
     return ret
 
   def can_update(self):
@@ -421,7 +421,7 @@ class Comment(ndb.Model):
     ret['id'] = self.id
 
 
-class Patchset(mixins.HideableModelMixin):
+class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
   message = ndb.TextProperty(indexed=False)
   data_ref = cas.models.CAS_IDProperty(PATCHSET_TYPE, 'utf-8')
 
@@ -503,8 +503,7 @@ class Patchset(mixins.HideableModelMixin):
     return Issue.can('update', key.parent())
 
   def can_read(self):
-    return (super(Patchset, self).can_read() and
-            self.root_async.get_result().can('read'))
+    return self.root_async.get_result().can('read')
 
   #### Model overrides
   def to_dict(self, include=None, exclude=None):

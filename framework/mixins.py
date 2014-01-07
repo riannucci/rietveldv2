@@ -14,7 +14,7 @@
 
 from google.appengine.ext import ndb
 
-from . import utils, authed_model
+from . import utils, exceptions
 
 
 class HierarchyMixin(object):
@@ -79,7 +79,7 @@ class HierarchyMixin(object):
     yield self.clear_marks_async()
 
 
-class HideableModelMixin(authed_model.AuthedModel, HierarchyMixin):
+class HideableModelMixin(ndb.Model, HierarchyMixin):
   hidden = ndb.BooleanProperty(default=False)
 
   def delete_async(self):
@@ -110,5 +110,9 @@ class HideableModelMixin(authed_model.AuthedModel, HierarchyMixin):
       not self.hidden and
       super(HideableModelMixin, self)._post_query_filter())
 
-  def can_read(self):
-    return not self.hidden
+  @classmethod
+  def _post_get_hook(cls, key, future):
+    super(HideableModelMixin, cls)._post_get_hook(key, future)
+    obj = future.get_result()
+    if obj and obj.hidden:
+      raise exceptions.NotFound(key)
