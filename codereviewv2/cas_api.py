@@ -17,7 +17,6 @@
 from google.appengine.ext import ndb
 
 from framework import rest_handler, utils, exceptions
-from framework.monkeypatch import fix_django_transfer_encoding   # pylint: disable=W0611
 
 from cas import models
 
