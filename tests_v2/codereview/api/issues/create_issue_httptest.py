@@ -86,7 +86,7 @@ PATCHSET = json.dumps({
 PATCHSET_CAS_ID = cas_id(PATCHSET, 'application/patchset+json')
 PATCHSET_CAS_ID_STR = cas_id_str(PATCHSET_CAS_ID)
 
-def Execute(api):
+def set_up_single_issue(api):
   api.login()
   xsrf = api.GET('accounts/me').json['data']['xsrf']
 
@@ -112,6 +112,12 @@ def Execute(api):
 
   api.PUT('issues/%d' % iid, json={'cc': ['coolguy@FancyDomain.co.uk']},
           xsrf=xsrf)
+
+  return iid, xsrf
+
+
+def Execute(api):
+  iid, xsrf = set_up_single_issue(api)
 
   api.GET('issues/%d/patchsets' % iid)
 

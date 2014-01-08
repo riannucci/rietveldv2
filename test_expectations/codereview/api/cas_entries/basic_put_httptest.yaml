@@ -44,13 +44,22 @@
         type: OK
 - request: PUT 'codereview/api/v2/cas_entries'
   response:
+    code: 400
+    json:
+      data:
+        msg: text/* content_types must have a charset.
+      status:
+        code: 400
+        type: ERROR
+- request: PUT 'codereview/api/v2/cas_entries'
+  response:
     code: 200
     json:
       data:
       - charset: utf-8
         content_type: text/plain
         csum: d19fa3cd84e9f738dad86264cb606b28626700dcb5cc7bd300eb990e5757ecff
-        salt: hQU4fbqMBeWGSHAVQ1biYweCtmLFhdNoOAC1GUYfiZA=
+        salt: rr7xGQaM+RGBFCEzBscddfbu277KZJUm4jtqcWyZmGk=
         size: 29
       status:
         code: 200

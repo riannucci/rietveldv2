@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import functools
 import gzip
 import json
@@ -48,11 +49,10 @@ class EasyResponse(object):
     (re.compile(r'localhost(:|%3[aA])\d+'), r'SERVER\1PORT'),
   )
 
-  def __init__(self, step_num, method, resource, response):
+  def __init__(self, method, resource, response):
     """
     @type response: requests.Response
     """
-    self.step_num = step_num
     self.method = method
     self.resource = resource
 
@@ -83,6 +83,8 @@ class HttpTestApi(object):
       'timeout': 10.0
     }
     self.state = []
+
+    self._cloaked = False
 
     self._resource_prefix = None
     self._session = requests.Session()
@@ -158,9 +160,10 @@ class HttpTestApi(object):
     except requests.exceptions.Timeout as to:
       raise Exception(str(to))
     final_resource = r.url[len(self._base_url)+1:]
-    r = EasyResponse(len(self.state), method, final_resource, r)
+    r = EasyResponse(method, final_resource, r)
 
-    self.state.append(r.to_dict())
+    if not self._cloaked:
+      self.state.append(r.to_dict())
 
     return r
 
@@ -176,7 +179,17 @@ class HttpTestApi(object):
     del self._session.cookies['dev_appserver_login']
 
   def comment(self, comment):
+    assert not self._cloaked, "Cannot comment while cloaked!"
     self.state[-1]['response'].setdefault('comments', []).append(comment)
+
+  @contextlib.contextmanager
+  def cloak(self, newval=True):
+    oldval = self._cloaked
+    try:
+      self._cloaked = newval
+      yield
+    finally:
+      self._cloaked = oldval
 
   METHODS = ('POST', 'PUT', 'GET', 'DELETE', 'HEAD', 'OPTIONS')
   def __getattr__(self, attr):

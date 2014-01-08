@@ -267,31 +267,58 @@ class PatchDrafts(rest_handler.RESTCollectionHandler):
   PARENT = Patches
   COLLECTION_NAME = 'drafts'
 
+  @classmethod
+  @ndb.tasklet
+  def _lookup_mdata(cls, key):
+    issue_key = ndb.Key(*key.pairs()[0])
+    mdata = yield issue_models.Issue.key_metadata_async(issue_key)
+    raise ndb.Return(mdata)
+
+  @classmethod
+  @ndb.tasklet
+  def _lookup_mdata_draft(cls, key):
+    mdata = yield cls._lookup_mdata(key)
+    if key.id() not in mdata.drafts:
+      raise exceptions.NotFound(key)
+    raise ndb.Return((mdata, mdata.drafts[key.id()]))
+
   @ndb.tasklet
   def get(self, key):
-    patch_key = key.parent()
-    patchset_key = patch_key.parent()
-    metadata_key = issue_models.Issue.metadata_key(patchset_key.parent())
-    metadata = yield safe_get(metadata_key)
-    ret = []
-    for draft in metadata.drafts:
-      if draft.patchset != patchset_key.id() or draft.patch != patch_key.id():
-        continue
-      ret.append(draft.to_dict())
-    raise ndb.Return({'data': ret})
+    mdata = yield self._lookup_mdata(key)
+    raise ndb.Return([d.to_dict() for d in mdata.drafts.values()])
 
   @ndb.tasklet
-  def get_one(self, key, **data):
-    drafts = yield self.get(key, **data)
-    ret = next((x for x in drafts if x['id'] == key.id()), None)
-    if not ret:
-      raise exceptions.NotFound(key)
-    raise ndb.Return({'data': ret})
+  def get_one(self, key):
+    _mdata, draft = yield self._lookup_mdata_draft(key)
+    raise ndb.Return(draft.to_dict())
 
-  def post(self, key, draft):
-    issue_key = key.parent().parent()
-    mdata_key = safe_get(issue_models.Issue.metadata_key(issue_key))
-    return issue_models.IssueMetadata.update_async(mdata_key, [draft])
+  @ndb.transactional_tasklet
+  def delete_one(self, key):
+    mdata, draft = yield self._lookup_mdata_draft(key)
+    draft.deleted = True
+    yield mdata.put_async()
+
+  @ndb.transactional_tasklet
+  def put_one(self, key, body):
+    mdata, draft = yield self._lookup_mdata_draft(key)
+    draft.body = body
+    yield mdata.put_async()
+    raise ndb.Return(draft.to_dict())
+
+  @ndb.transactional_tasklet
+  def put(self, key, drafts):
+    mdata = yield self._lookup_mdata(key)
+    del mdata.raw_drafts
+    drafts = [mdata.add_draft(key.parent(), **d) for d in drafts]
+    yield mdata.put_async()
+    raise ndb.Return([d.to_dict() for d in drafts])
+
+  @ndb.transactional_tasklet
+  def post(self, key, body, side, lineno):
+    mdata = yield self._lookup_mdata(key)
+    draft = mdata.add_draft(key.parent(), body, side, lineno)
+    yield mdata.put_async()
+    raise ndb.Return(draft.to_dict())
 
 
 class Messages(rest_handler.RESTCollectionHandler):

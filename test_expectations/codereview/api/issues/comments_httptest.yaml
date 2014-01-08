@@ -1,0 +1,110 @@
+- request: POST 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts'
+  response:
+    code: 302
+    json:
+      data:
+        location: /_ah/login?continue=http%3A//SERVER%3APORT/codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts
+        msg: Needs login.
+      status:
+        code: 302
+        type: REDIRECT
+- request: GET '_ah/login?action=Login&admin=False&email=test%40example.com'
+  response:
+    code: 302
+    raw: []
+- request: POST 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts'
+  response:
+    code: 200
+    json:
+      data:
+        body: 'I like this line very much.
+
+          Maybe if it had more syllables?'
+        created: '2013-12-27 02:28:04.724024'
+        id: 1
+        lineno: 2
+        modified: '2013-12-27 02:28:04.724024'
+        owner: test@example.com
+        patch: 1
+        patchset: 1
+        side: old
+      status:
+        code: 200
+        type: OK
+- request: PUT 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts/1'
+  response:
+    code: 200
+    json:
+      data:
+        body: I do not really like this line at all...
+        created: '2013-12-27 02:28:04.724024'
+        id: 1
+        lineno: 2
+        modified: '2013-12-27 02:28:24.941115'
+        owner: test@example.com
+        patch: 1
+        patchset: 1
+        side: old
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts'
+  response:
+    code: 200
+    json:
+      data:
+      - body: I do not really like this line at all...
+        created: '2013-12-27 02:28:04.724024'
+        id: 1
+        lineno: 2
+        modified: '2013-12-27 02:28:24.941115'
+        owner: test@example.com
+        patch: 1
+        patchset: 1
+        side: old
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts/1'
+  response:
+    code: 200
+    json:
+      data:
+        body: I do not really like this line at all...
+        created: '2013-12-27 02:28:04.724024'
+        id: 1
+        lineno: 2
+        modified: '2013-12-27 02:28:24.941115'
+        owner: test@example.com
+        patch: 1
+        patchset: 1
+        side: old
+      status:
+        code: 200
+        type: OK
+- request: DELETE 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts/1'
+  response:
+    code: 200
+    json:
+      data: null
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts'
+  response:
+    code: 200
+    json:
+      data: []
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts/1'
+  response:
+    code: 404
+    json:
+      data:
+        msg: Key('Issue', 5629499534213120, 'Patchset', 1, '$Patches', 1, '$PatchDrafts',
+          1) was not found.
+      status:
+        code: 404
+        type: ERROR

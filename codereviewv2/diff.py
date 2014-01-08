@@ -35,9 +35,10 @@ class Diffable(object):  # pylint: disable=R0921
     raise NotImplementedError()
 
   @utils.cached_property
-  def lines(self):
-    return utils.LazyLineSplitter(self.data_async.get_result(),
-                                  self.lineending)
+  @ndb.tasklet
+  def lines_async(self):
+    data = yield self.data_async
+    raise ndb.Return(utils.LazyLineSplitter(data, self.lineending))
 
   @utils.cached_property
   def size(self):
@@ -91,10 +92,13 @@ class DiffablePair(object):
       'action': self.action,
     }
 
+  def _seq_matcher(self):
+    return difflib.SequenceMatcher(None, self.old.lines_async.get_result(),
+                                   self.new.lines_async.get_result())
+
   def _diff_body(self, n, nl, seq_matcher=None):
     if seq_matcher is None:
-      seq_matcher = difflib.SequenceMatcher(None, self.old.lines,
-                                            self.new.lines)
+      seq_matcher = self._seq_matcher()
     old, new = self.old, self.new
     started = False
     for group in seq_matcher.get_grouped_opcodes(n):
@@ -106,14 +110,14 @@ class DiffablePair(object):
       yield "@@ -%d,%d +%d,%d @@%s" % (i1+1, i2-i1, j1+1, j2-j1, nl)
       for tag, i1, i2, j1, j2 in group:
         if tag == 'equal':
-          for line in self.old.lines[i1:i2]:
+          for line in seq_matcher.a[i1:i2]:
             yield ' ' + line
           continue
         if tag == 'replace' or tag == 'delete':
-          for line in self.old.lines[i1:i2]:
+          for line in seq_matcher.a[i1:i2]:
             yield '-' + line
         if tag == 'replace' or tag == 'insert':
-          for line in self.new.lines[j1:j2]:
+          for line in seq_matcher.b[j1:j2]:
             yield '+' + line
 
   def generate_diff(self, mode, **kwargs):
@@ -154,7 +158,7 @@ class DiffablePair(object):
   def generate_git_diff(self, n=3, nl='\n'):
     # TODO(iannucci): Produce hunk summaries, i.e.
     # @@ ... @@ int main()
-    seq_matcher = difflib.SequenceMatcher(None, self.old.lines, self.new.lines)
+    seq_matcher = self._seq_matcher()
     old, new = self.old, self.new
 
     old_csum = old.git_csum_async.get_result()

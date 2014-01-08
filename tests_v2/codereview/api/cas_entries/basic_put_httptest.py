@@ -23,17 +23,28 @@ def Execute(api):
   csum.update(str(len(DATA)))
   csum.update(MIMETYPE)
   csum.update(CHARSET)
-  ex_files = [{
+  bad_entry = {
+    'cas_id': {
+      'csum': csum.hexdigest(),
+      'content_type': MIMETYPE,
+    },
+    'data': DATA.encode('base64'),
+  }
+  good_entry = {
     'cas_id': {
       'csum': csum.hexdigest(),
       'content_type': MIMETYPE,
       'charset': CHARSET
     },
     'data': DATA.encode('base64'),
-  }]
+  }
 
-  api.PUT('cas_entries', json=ex_files)  # fails b/c logged out
+  api.PUT('cas_entries', json=[good_entry])  # fails b/c logged out
   api.login()
-  api.PUT('cas_entries', json=ex_files)  # fails b/c no xsrf
-  me = api.GET('accounts/me').json
-  api.PUT('cas_entries', json=ex_files, xsrf=me['data']['xsrf'])
+  api.PUT('cas_entries', json=[good_entry])  # fails b/c no xsrf
+  xsrf = api.GET('accounts/me').json['data']['xsrf']
+
+  # fails because no charset
+  api.PUT('cas_entries', json=[bad_entry], xsrf=xsrf)
+
+  api.PUT('cas_entries', json=[good_entry], xsrf=xsrf)

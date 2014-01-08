@@ -31,6 +31,10 @@ from . import auth_models, diff
 PATCHSET_TYPE = 'application/patchset+json'
 
 
+
+# TODO(iannucci): Make this return a sequence which throws NotFound instead of
+# IndexError.
+# TODO(iannucci): Make sequence 1-based to match ids
 @ndb.tasklet
 def limit_entities_async(model_name, base_key, limit):
   ret = []
@@ -52,6 +56,21 @@ class LowerEmailProperty(ndb.StringProperty):
     if not mail.is_email_valid(value):
       raise TypeError('%r does not appear to be a valid email address' % value)
     return value
+
+
+class EnumProperty(ndb.IntegerProperty):
+  # pylint: disable=E1002
+  def __init__(self, *args, **kwargs):
+    assert 'choices' in kwargs
+    assert isinstance(kwargs['choices'], (list, tuple))
+    self._ordered_choices = tuple(kwargs['choices'])
+    super(EnumProperty, self).__init__(*args, **kwargs)
+
+  def _to_base_type(self, value):
+    return self._ordered_choices.index(value)
+
+  def _from_base_type(self, value):
+    return self._ordered_choices[value]
 
 
 class Content(diff.Diffable):
@@ -259,18 +278,27 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
   def patchsets_async(self):  # pylint: disable=E0202
     return limit_entities_async('Patchset', self.key, self.last_patchset)
 
-  @classmethod
-  def metadata_key(cls, issue_key):
+  @staticmethod
+  @ndb.tasklet
+  def key_metadata_async(issue_key):
     assert issue_key.kind() == 'Issue' and issue_key.parent() is None
-    return ndb.Key(
-      pairs=(
-        auth_models.Account.current_user_key() +
-        [('IssueMetadata', issue_key.id())]
-      ))
 
-  @utils.cached_assignable_property
+    cur_user_key = auth_models.Account.current_user_key()
+    if cur_user_key:
+      key = ndb.Key(
+        pairs=(cur_user_key.pairs() + (('IssueMetadata', issue_key.id()),)))
+      ent = yield key.get_async()
+      if ent is None:
+        ent = IssueMetadata(key=key)
+        yield ent.put_async()
+    else:
+      raise exceptions.NeedsLogin()
+
+    raise ndb.Return(ent)
+
+  @utils.cached_property
   def metadata_async(self):
-    return self.metadata_key(self.key).get_async()
+    return self.key_metadata_async(self.key)
 
   #### Entity Manipulation
   @ndb.tasklet
@@ -398,14 +426,19 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
     return r
 
 
+def validate_not_empty(_prop, val):
+  if not val:
+    raise exceptions.BadData('Empty comments not allowed.')
+  return val
+
 class Comment(ndb.Model):
   id = None
 
   patch = ndb.IntegerProperty(indexed=False)
   lineno = ndb.IntegerProperty(indexed=False)
-  # 0 is left, 1 is right
-  side = ndb.IntegerProperty(indexed=False, choices=(0, 1))
-  body = ndb.TextProperty()
+  side = EnumProperty(choices=['old', 'new'])
+
+  body = ndb.TextProperty(validator=validate_not_empty)
 
   owner = auth_models.AccountProperty(auto_current_user_add=True, indexed=False)
   created = ndb.DateTimeProperty(auto_now_add=True, indexed=False)
@@ -415,10 +448,11 @@ class Comment(ndb.Model):
     assert 'created' not in data
     super(Comment, self).populate(**data)
 
-  def to_dict(self, *args, **kwargs):
-    ret = super(Comment, self).to_dict(*args, **kwargs)
+  def to_dict(self, include=None, exclude=None):
+    ret = super(Comment, self).to_dict(include=include, exclude=exclude)
     assert self.id is not None
     ret['id'] = self.id
+    return ret
 
 
 class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
@@ -434,6 +468,9 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
                                              compressed=True)
 
   #### Datastore Read Functions
+  # TODO(iannucci): Make this return a sequence which throws NotFound instead of
+  # IndexError.
+  # TODO(iannucci): Make sequence 1-based to match ids
   @utils.clearable_cached_property
   @ndb.tasklet
   def patches_async(self):
@@ -556,13 +593,15 @@ class Message(authed_model.AuthedModel):
 
 
 class DraftComment(Comment):
-  patchset = ndb.KeyProperty(kind=Patchset)
+  patchset = ndb.IntegerProperty(indexed=False)
   modified = ndb.DateTimeProperty(auto_now=True)
 
-  def populate(self, **data):
-    assert 'modified' not in data
-    data['patchset'] = ndb.Key(urlsafe=data['patchset'])
-    super(DraftComment, self).populate(**data)
+  deleted = ndb.BooleanProperty(default=False)
+
+  def to_dict(self, include=None, exclude=None):
+    exclude = set(exclude or ())
+    exclude.add('deleted')
+    return super(DraftComment, self).to_dict(include=include, exclude=exclude)
 
 
 class IssueMetadata(authed_model.AuthedModel):
@@ -576,32 +615,29 @@ class IssueMetadata(authed_model.AuthedModel):
   starred = ndb.BooleanProperty(default=False)
 
   #### API manipulation
-  @classmethod
-  @ndb.transactional_tasklet
-  def update_async(cls, my_key, drafts, **data):
-    no_extra(data)
-    ent = yield my_key.get_async()
-    if ent is None:
-      ent = cls(key=my_key)
+  def add_draft(self, patch_key, body, side, lineno):
+    d_ent = DraftComment(
+      patch=patch_key.id(),
+      patchset=patch_key.parent().id(),
 
-    for draft in drafts:
-      d_id = draft.pop('id', None)
-      if d_id is not None:
-        d_ent = ent.drafts[d_id]
-      else:
-        d_ent = DraftComment()
-        d_ent.id = len(ent.drafts)
-        ent.drafts.append(d_ent)
-      d_ent.populate(**draft)
-
-    yield ent.put_async()
+      body=body,
+      lineno=lineno,
+      side=side,
+    )
+    d_ent.id = len(self.drafts) + 1
+    self.raw_drafts.append(d_ent)
+    self.drafts[d_ent.id] = d_ent
+    return d_ent
 
   #### Properties
   @utils.cached_property
   def drafts(self):
+    drafts = {}
     for i, d in enumerate(self.raw_drafts):
-      d.id = i
-    return self.drafts
+      d.id = i + 1
+      if not d.deleted:
+        drafts[d.id] = d
+    return drafts
 
   @property
   def issue_key(self):
@@ -627,12 +663,12 @@ class IssueMetadata(authed_model.AuthedModel):
   @classmethod
   def can_create_key(cls, key):
     cur_user = account.get_current_user()
-    return cur_user and cur_user.email() == key.parent().id()
+    return cur_user and '<%s>' % cur_user.email() == key.parent().id()
 
   @classmethod
   def can_read_key(cls, key):
     return cls.can('create', key)
 
   @classmethod
-  def can_write_key(cls, key):
+  def can_update_key(cls, key):
     return cls.can('create', key)
