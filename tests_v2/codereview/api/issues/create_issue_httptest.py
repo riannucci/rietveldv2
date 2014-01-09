@@ -123,6 +123,8 @@ def Execute(api):
 
   api.GET('issues/%d/patchsets/1' % iid)
 
+  api.GET('issues/%d/patchsets/1/diff' % iid)
+
   api.GET('issues/%d/patchsets/1/patches' % iid)
 
   api.GET('issues/%d/patchsets/1/patches/1' % iid)

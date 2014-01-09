@@ -172,6 +172,25 @@
       status:
         code: 200
         type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/diff'
+  response:
+    code: 200
+    raw:
+    - diff --git a/path/to/haiku.txt b/different/path/to/haiku.txt
+    - similarity index 50%
+    - rename from path/to/haiku.txt
+    - rename to different/path/to/haiku.txt
+    - index a049b14093aa39f098039262e72be845a1355107..2c1190497106feb4cf1f14aedc9aa4326375954f
+      100644
+    - '--- a/path/to/haiku.txt fake timestamp'
+    - +++ b/different/path/to/haiku.txt fake timestamp
+    - '@@ -1,4 +1,4 @@'
+    - ' '
+    - ' Waters move softly'
+    - -The lake gently beckons you
+    - -Slip into it's grave
+    - +The hat gently pokes you
+    - +Put it on your face
 - request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches'
   response:
     code: 200
