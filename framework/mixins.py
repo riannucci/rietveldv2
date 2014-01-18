@@ -17,6 +17,18 @@ from google.appengine.ext import ndb
 from . import utils, exceptions
 
 
+class IDModelMixin(ndb.Model):
+  @property
+  def id(self):
+    return self.key.id()
+
+  def to_dict(self, include=None, exclude=None):
+    # TODO(iannucci): Respect exclude/include
+    r = super(IDModelMixin, self).to_dict(include=include, exclude=exclude)
+    r['id'] = self.id
+    return r
+
+
 class HierarchyMixin(object):
   # These RELY on ndb's use_cache (the default). Otherwise they will cause
   # datastore operations AND will get wired to the wrong instances.

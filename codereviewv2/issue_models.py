@@ -248,7 +248,7 @@ def no_extra(data):
 
 
 class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
-            query_parser.StringQueryMixin):
+            query_parser.StringQueryMixin, mixins.IDModelMixin):
   # Old Issue models won't have a VERSION field at all
   VERSION = ndb.IntegerProperty(default=2, indexed=False)
 
@@ -471,9 +471,7 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
     exclude.update((
       'hidden', 'last_message', 'last_patchset', 'notifications'
     ))
-    r = super(Issue, self).to_dict(include=include, exclude=exclude)
-    r['id'] = self.key.id()
-    return r
+    return super(Issue, self).to_dict(include=include, exclude=exclude)
 
 
 def validate_not_empty(_prop, val):
@@ -502,7 +500,8 @@ class Comment(ndb.Model):
     return ret
 
 
-class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
+class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin,
+               mixins.IDModelMixin):
   message = ndb.TextProperty(indexed=False)
   data_ref = cas.models.CAS_IDProperty(PATCHSET_TYPE, 'utf-8')
 
@@ -592,7 +591,6 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
     exclude.add('hidden')
     exclude.add('raw_comments')
     r = super(Patchset, self).to_dict(include, exclude)
-    r['id'] = self.key.id()
     if not include or 'comments' in include:
       r['comments'] = [c.to_dict() for c in self.comments.itervalues()]
     if not include or 'data_ref' in include:
