@@ -21,6 +21,7 @@ from . import utils
 
 class FrameworkException(Exception):
   """Base class for all exceptions in framework."""
+  STATUS_CODE = 500
 
 
 class Forbidden(FrameworkException):

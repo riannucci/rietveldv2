@@ -20,6 +20,7 @@
         body: 'I like this line very much.
 
           Maybe if it had more syllables?'
+        context_line: The lake gently beckons you
         created: '2013-12-27 02:28:04.724024'
         id: 1
         lineno: 2
@@ -37,10 +38,11 @@
     json:
       data:
         body: I do not really like this line at all...
+        context_line: The lake gently beckons you
         created: '2013-12-27 02:28:04.724024'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:24.941115'
+        modified: '2013-12-27 02:28:25.041115'
         owner: test@example.com
         patch: 1
         patchset: 1
@@ -54,10 +56,11 @@
     json:
       data:
       - body: I do not really like this line at all...
+        context_line: The lake gently beckons you
         created: '2013-12-27 02:28:04.724024'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:24.941115'
+        modified: '2013-12-27 02:28:25.041115'
         owner: test@example.com
         patch: 1
         patchset: 1
@@ -71,10 +74,11 @@
     json:
       data:
         body: I do not really like this line at all...
+        context_line: The lake gently beckons you
         created: '2013-12-27 02:28:04.724024'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:24.941115'
+        modified: '2013-12-27 02:28:25.041115'
         owner: test@example.com
         patch: 1
         patchset: 1
@@ -103,8 +107,8 @@
     code: 404
     json:
       data:
-        msg: Key('Issue', 5629499534213120, 'Patchset', 1, '$Patches', 1, '$PatchDrafts',
-          1) was not found.
+        msg: Key('Account', '<test@example.com>', 'IssueMetadata', 5629499534213120,
+          '$Drafts', 1) was not found.
       status:
         code: 404
         type: ERROR

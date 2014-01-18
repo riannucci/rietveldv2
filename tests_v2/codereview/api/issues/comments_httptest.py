@@ -14,7 +14,7 @@
 
 from . import create_issue_httptest
 
-def Execute(api):
+def set_up_single_comment(api):
   with api.cloak():
     iid, xsrf = create_issue_httptest.set_up_single_issue(api)
     api.logout()
@@ -32,6 +32,11 @@ def Execute(api):
     'lineno': 2,
     'side': 'old',
   })
+  return iid, xsrf
+
+
+def Execute(api):
+  iid, xsrf = set_up_single_comment(api)
 
   api.PUT('issues/%d/patchsets/1/patches/1/drafts/1' % iid, xsrf=xsrf, json={
     'body': 'I do not really like this line at all...'

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import json
 import re
 
@@ -31,13 +32,54 @@ from . import auth_models, diff
 PATCHSET_TYPE = 'application/patchset+json'
 
 
+class IDIndexedCollection(collections.MutableMapping):
+  def __init__(self, name, items=(), parent_key=None, append_callback=None):
+    self._name = name
+    self._items = list(items)
 
-# TODO(iannucci): Make this return a sequence which throws NotFound instead of
-# IndexError.
-# TODO(iannucci): Make sequence 1-based to match ids
+    self.parent_key = parent_key
+    self.append_callback = append_callback
+
+  def _key_for_id(self, id):
+    assert self.parent_key is not None
+    return ndb.Key(pairs=self.parent_key.pairs() + ((self._name, id),))
+
+  def __getitem__(self, id):
+    if not isinstance(id, int) or id < 1 or id > len(self):
+      raise exceptions.NotFound(self._key_for_id(id))
+    item = self._items[id - 1]
+    if item is None:
+      raise exceptions.NotFound(self._key_for_id(id))
+    return item
+
+  def __delitem__(self, id):
+    # Will throw if id is bad or item is gone already
+    self.__getitem__(id)
+    del self._items[id - 1]
+
+  def __setitem__(self, id, value):
+    next_id = len(self._items) + 1
+    if id != next_id:
+      raise exceptions.FrameworkException('Setting wrong id %s' % id)
+    if self.append_callback:
+      self.append_callback(value)
+    self._items.append(value)
+
+  def append(self, value):
+    id = len(self._items) + 1
+    self[id] = value
+    return id
+
+  def __iter__(self):
+    return (i + 1 for i, item in enumerate(self._items) if item is not None)
+
+  def __len__(self):
+    return sum(1 for item in self._items if item is not None)
+
+
 @ndb.tasklet
 def limit_entities_async(model_name, base_key, limit):
-  ret = []
+  ret = IDIndexedCollection(model_name, parent_key=base_key)
   futures = [
     ndb.Key(pairs=base_key.pairs() + ((model_name, i),)).get_async()
     for i in range(1, limit+1)
@@ -46,7 +88,7 @@ def limit_entities_async(model_name, base_key, limit):
     try:
       ret.append((yield f))
     except exceptions.NotFound:
-      pass
+      ret.append(None)
   raise ndb.Return(ret)
 
 
@@ -152,11 +194,11 @@ class Patch(diff.DiffablePair):
     return r
 
 
-class PatchList(list):
+class PatchCollection(IDIndexedCollection):
   @utils.cached_property
   def CAS_REFERENCES(self):
     ret = []
-    for patch in self:
+    for patch in self.itervalues():
       if patch.old:
         ret.append(patch.old.cas_id)
       if patch.new:
@@ -188,8 +230,16 @@ def patchset_json(data):
 
   assert ['patches'] == parsed.keys()
   assert parsed['patches']
+
+  def forbidden(_value):
+    raise exceptions.Forbidden('add/del patches in a patchset')
+
   raise ndb.Return(
-    PatchList(Patch.from_dict(i+1, p) for i, p in enumerate(parsed['patches'])))
+    PatchCollection(
+      '$Patches',
+      (Patch.from_dict(i+1, p) for i, p in enumerate(parsed['patches'])),
+      forbidden,
+    ))
 
 
 def no_extra(data):
@@ -367,11 +417,11 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
       self.approval_status[m.sender] = True
     self.last_message += 1
     self.n_messages += 1
-    self.n_comments += drafts
+    self.n_comments += len(drafts)
 
     affected_patchsets = yield [d.patchset.get_async() for d in drafts]
     to_wait = [m.mark_async()]
-    for ps, draft in zip(affected_patchsets, drafts):
+    for ps, draft in zip(affected_patchsets, drafts.values()):
       guts = draft.to_dict()
       guts.pop('owner', None)
       guts.pop('created', None)
@@ -385,19 +435,19 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
   @utils.clearable_cached_property
   def collaborators(self):
     prefix = 'COLLABORATOR='
-    ret = []
+    ret = set()
     for line in self.description.splitlines():
       if line.startswith(prefix):
-        ret.append(line[len(prefix):].strip())
+        ret.add(line[len(prefix):].strip())
     return ret
 
   @utils.clearable_cached_property
   def editors(self):
-    return set([self.owner.email()] + self.collaborators)
+    return self.collaborators | set((self.owner.email(),))
 
   @utils.clearable_cached_property
   def viewers(self):
-    return set(self.editors + self.cc + self.reviewers)
+    return self.editors | set(self.cc) | set(self.reviewers)
 
   #### AuthedModel overrides
   @classmethod
@@ -443,10 +493,7 @@ class Comment(ndb.Model):
   owner = auth_models.AccountProperty(auto_current_user_add=True, indexed=False)
   created = ndb.DateTimeProperty(auto_now_add=True, indexed=False)
 
-  def populate(self, **data):
-    assert 'owner' not in data
-    assert 'created' not in data
-    super(Comment, self).populate(**data)
+  context_line = ndb.TextProperty()
 
   def to_dict(self, include=None, exclude=None):
     ret = super(Comment, self).to_dict(include=include, exclude=exclude)
@@ -468,31 +515,29 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
                                              compressed=True)
 
   #### Datastore Read Functions
-  # TODO(iannucci): Make this return a sequence which throws NotFound instead of
-  # IndexError.
-  # TODO(iannucci): Make sequence 1-based to match ids
   @utils.clearable_cached_property
   @ndb.tasklet
   def patches_async(self):
     all_patches = yield self.data_ref.data_async()
+    all_patches.parent_key = self.key
 
     comments_by_patch = {}
-    for c in self.comments:
+    for c in self.comments.itervalues():
       comments_by_patch.setdefault(c.patch, []).append(c)
 
     prev = None
     prev_with_comment = None
-    for i, p in enumerate(all_patches):
+    for p in all_patches.itervalues():
       p.prev = prev
       p.prev_with_comment = prev_with_comment
-      p.comments = comments_by_patch.get(i, [])
+      p.comments = comments_by_patch.get(p.id, [])
       prev = p
       if p.comments:
         prev_with_comment = p
 
     next = None
     next_with_comment = None
-    for p in reversed(all_patches):
+    for p in reversed(all_patches.values()):
       p.next = next
       p.next_with_comment = next_with_comment
       next = p
@@ -507,8 +552,9 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
   @utils.cached_property
   def comments(self):
     for i, c in enumerate(self.raw_comments):
-      c.id = i
-    return self.raw_comments
+      c.id = i + 1
+    return IDIndexedCollection('$Comment', self.raw_comments, self.key,
+                               self.raw_comments.append)
 
   #### RESTModelMixin overrides
   @classmethod
@@ -521,14 +567,12 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
     raise ndb.Return(ent.to_dict())
 
   #### Entity manipulation
-  @ndb.tasklet
   def add_comment_async(self, data):
     assert 'created' not in data
     assert 'owner' not in data
-    c = Comment()
-    c.populate(**data)
-    self.comments.append(c)
-    self.mark_async()
+    c = Comment(**data)
+    c.id = self.comments.append(c)
+    return self.mark_async()
 
   #### AuthedModel overrides
   @classmethod
@@ -550,7 +594,7 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin):
     r = super(Patchset, self).to_dict(include, exclude)
     r['id'] = self.key.id()
     if not include or 'comments' in include:
-      r['comments'] = [c.to_dict() for c in self.comments]
+      r['comments'] = [c.to_dict() for c in self.comments.itervalues()]
     if not include or 'data_ref' in include:
       r['data_ref'] = self.data_ref.to_dict()
     return r
@@ -615,7 +659,8 @@ class IssueMetadata(authed_model.AuthedModel):
   starred = ndb.BooleanProperty(default=False)
 
   #### API manipulation
-  def add_draft(self, patch_key, body, side, lineno):
+  @ndb.tasklet
+  def add_draft_async(self, patch_key, body, side, lineno):
     d_ent = DraftComment(
       patch=patch_key.id(),
       patchset=patch_key.parent().id(),
@@ -624,20 +669,36 @@ class IssueMetadata(authed_model.AuthedModel):
       lineno=lineno,
       side=side,
     )
-    d_ent.id = len(self.drafts) + 1
-    self.raw_drafts.append(d_ent)
-    self.drafts[d_ent.id] = d_ent
-    return d_ent
+
+    @ndb.non_transactional
+    @ndb.tasklet
+    def get_context():
+      patchset = yield patch_key.parent().get_async()
+      patches = yield patchset.patches_async
+      patch = patches[patch_key.id()]
+      content = getattr(patch, side)  # old or new
+      raise ndb.Return((yield content.lines_async)[lineno])
+    # TODO(iannucci): Proper newline handling? is rstrip() good enough?
+    d_ent.context_line = (yield get_context()).rstrip()
+
+    d_ent.id = self.drafts.append(d_ent)
+    raise ndb.Return(d_ent)
+
+  def clear_drafts(self):
+    self.raw_drafts = []
+    self.drafts.clear()
 
   #### Properties
   @utils.cached_property
   def drafts(self):
-    drafts = {}
     for i, d in enumerate(self.raw_drafts):
       d.id = i + 1
-      if not d.deleted:
-        drafts[d.id] = d
-    return drafts
+    return IDIndexedCollection(
+      '$Drafts',
+      ((None if d.deleted else d) for d in self.raw_drafts),
+      self.key,
+      self.raw_drafts.append
+    )
 
   @property
   def issue_key(self):

@@ -129,7 +129,7 @@ class Patchsets(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get(self, key):
     issue = yield safe_get(key.parent())
-    psets = [x.to_dict() for x in (yield issue.patchsets_async)]
+    psets = [x.to_dict() for x in (yield issue.patchsets_async).itervalues()]
     raise ndb.Return(psets)
 
   @ndb.tasklet
@@ -161,7 +161,7 @@ class Patchsets(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get_one_diff(self, key, mode='git'):
     patchset = yield safe_get(key)
-    patches = collections.deque((yield patchset.patches_async))
+    patches = collections.deque((yield patchset.patches_async).itervalues())
 
     # clear out the cached future, since the patchset will linger in the
     # ndb context, causing all the patch content data to stick around forever.
@@ -200,19 +200,20 @@ class Patches(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get(self, key):
     ps = yield safe_get(key.parent())
-    raise ndb.Return([p.to_dict() for p in (yield ps.patches_async)])
+    raise ndb.Return([p.to_dict()
+                      for p in (yield ps.patches_async).itervalues()])
 
   @ndb.tasklet
   def get_one(self, key):
     ps = yield safe_get(key.parent())
     patches = yield ps.patches_async
-    raise ndb.Return(patches[key.id() - 1].to_dict())
+    raise ndb.Return(patches[key.id()].to_dict())
 
   @ndb.tasklet
   def get_one_diff(self, key, mode='git'):
     patchset = yield safe_get(key.parent())
     patches = yield patchset.patches_async
-    patch = patches[key.id() - 1]
+    patch = patches[key.id()]
     # TODO(iannucci): Convert to a real streaming response
     # TODO(iannucci): Cache generated diffs for some time period
     raise ndb.Return(
@@ -251,16 +252,13 @@ class PatchComments(rest_handler.RESTCollectionHandler):
     patch_key = key.parent()
     ps = yield safe_get(patch_key.parent())
     patches = yield ps.patches_async
-    ret = [c.to_dict() for c in patches[key.id() - 1].comments]
+    ret = [c.to_dict() for c in patches[key.id()].comments]
     raise ndb.Return(ret)
 
   @ndb.tasklet
   def get_one(self, key, **data):
     comments = yield self.get(key, **data)
-    ret = next((x for x in comments if x['id'] == key.id()), None)
-    if not ret or ret['patch'] != key.parent().id():
-      raise exceptions.NotFound(key)
-    raise ndb.Return(ret.to_dict())
+    raise ndb.Return(comments[key.id()].to_dict())
 
 
 class PatchDrafts(rest_handler.RESTCollectionHandler):
@@ -308,15 +306,15 @@ class PatchDrafts(rest_handler.RESTCollectionHandler):
   @ndb.transactional_tasklet
   def put(self, key, drafts):
     mdata = yield self._lookup_mdata(key)
-    del mdata.raw_drafts
-    drafts = [mdata.add_draft(key.parent(), **d) for d in drafts]
+    mdata.clear_drafts()
+    drafts = yield [mdata.add_draft_async(key.parent(), **d) for d in drafts]
     yield mdata.put_async()
     raise ndb.Return([d.to_dict() for d in drafts])
 
   @ndb.transactional_tasklet
   def post(self, key, body, side, lineno):
     mdata = yield self._lookup_mdata(key)
-    draft = mdata.add_draft(key.parent(), body, side, lineno)
+    draft = yield mdata.add_draft_async(key.parent(), body, side, lineno)
     yield mdata.put_async()
     raise ndb.Return(draft.to_dict())
 
