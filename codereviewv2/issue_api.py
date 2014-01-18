@@ -276,8 +276,6 @@ class PatchDrafts(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def _lookup_mdata_draft(cls, key):
     mdata = yield cls._lookup_mdata(key)
-    if key.id() not in mdata.drafts:
-      raise exceptions.NotFound(key)
     raise ndb.Return((mdata, mdata.drafts[key.id()]))
 
   @ndb.tasklet
