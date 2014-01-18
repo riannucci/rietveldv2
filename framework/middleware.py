@@ -158,8 +158,12 @@ class JSONResponseMiddleware(Middleware):
     return ret
 
   def error(self, request, ex_info):
-    logging.error('Handling JSON error.', exc_info=ex_info)
     status = getattr(ex_info[1], 'STATUS_CODE', 500)
+    if status == 500:
+      logging.error('Handling JSON error.', exc_info=ex_info)
+    else:
+      logging.error('Handling JSON error %r (status %d).',
+                    ex_info[0].__name__, status)
     headers = getattr(ex_info[1], 'HEADERS', {})
     r = {
       STATUS_CODE: status,
