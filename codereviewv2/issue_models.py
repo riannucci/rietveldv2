@@ -278,6 +278,15 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
   approval_status = ndb.JsonProperty(compressed=True, default={})
   notifications = ndb.JsonProperty(compressed=True)
 
+  VIEWER_UPDATE_PROPS = frozenset((
+    'last_message', 'n_comments', 'n_messages', 'approval_status',
+    'notifications', 'modified', 'cc', 'reviewers'
+  ))
+
+  EDITOR_UPDATE_PROPS = VIEWER_UPDATE_PROPS | frozenset((
+    'subject', 'description', 'closed', 'private', 'last_patchset',
+    'n_patchsets', 'hidden'  # hidden is from HidableModelMixin
+  ))
 
   #### Factory Function
   @classmethod
@@ -451,8 +460,8 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
 
   #### AuthedModel overrides
   @classmethod
-  def can_create_key(cls, _key):
-    return account.get_current_user() is not None
+  def can_create_key(cls, key):
+    return account.get_current_user() is not None and key.id() is None
 
   def can_read(self):
     ret = True
@@ -463,7 +472,13 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
 
   def can_update(self):
     cur_user = account.get_current_user()
-    return cur_user and cur_user.email() in self.editors
+    if cur_user:
+      # TODO(iannucci): should editors + cc + this comparison be lowercase?
+      modified = self.modified_properties()
+      if cur_user.email() in self.editors:
+        return len(modified - self.EDITOR_UPDATE_PROPS) == 0
+      elif cur_user.email() in self.viewers:
+        return len(modified - self.VIEWER_UPDATE_PROPS) == 0
 
   #### Model overrides
   def to_dict(self, include=None, exclude=None):
@@ -494,7 +509,6 @@ class Comment(ndb.Model):
 
   def to_dict(self, include=None, exclude=None):
     ret = super(Comment, self).to_dict(include=include, exclude=exclude)
-    assert self.id is not None
     ret['id'] = self.id
     return ret
 

@@ -12,12 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
+
 from google.appengine.ext import ndb
 
 from . import exceptions
 from . import utils
 
 from .monkeypatch import query_hooks  # pylint: disable=W0611
+
+def temp_hash(obj):
+  if isinstance(obj, ndb.Model):
+    return hash(obj.__class__.__name__) ^ temp_hash(obj.to_dict())
+
+  if isinstance(obj, collections.Hashable):
+    return hash(obj)
+  else:
+    xor = lambda x, y: x ^ y
+    if isinstance(obj, dict):
+      subhash = reduce(
+        xor, (hash((k, temp_hash(v))) for k, v in obj.iteritems()), 0)
+    elif isinstance(obj, set):
+      subhash = reduce(xor, (temp_hash(x) for x in obj), 0)
+    elif isinstance(obj, list):
+      subhash = reduce(xor, (hash((i, temp_hash(x)))
+                             for i, x in enumerate(obj)), 0)
+    else:
+      raise exceptions.BadData(
+        'I don\'t know how to hash %s: %r' % (obj.__class__, obj))
+    return hash(obj.__class__.__name__) ^ subhash
+
 
 class AuthedModel(ndb.Model):
   """Allows a derived model to automatically restrict its access permissions
@@ -76,7 +100,7 @@ class AuthedModel(ndb.Model):
   def __init__(self, *args, **kwargs):
     super(AuthedModel, self).__init__(*args, **kwargs)
     self._permissions_cache = {}
-    self._in_datastore = False
+    self._property_fingerprint = {}
 
   #### Classmethod Stubs
   @classmethod
@@ -106,6 +130,27 @@ class AuthedModel(ndb.Model):
     return False
 
   #### Methods
+  def calculate_property_fingerprint(self):
+    ret = {}
+    for prop_name, prop_obj in self._properties.iteritems():
+      # pylint: disable=W0212
+      if prop_obj._repeated:
+        ret[prop_name] = temp_hash(map(temp_hash, prop_obj._get_value(self)))
+      else:
+        ret[prop_name] = temp_hash(prop_obj._get_value(self))
+    return ret
+
+  def modified_properties(self):
+    current_fingerprint = self.calculate_property_fingerprint()
+    return set(
+      prop_name
+      for prop_name, prev_value in self._property_fingerprint.iteritems()
+      if current_fingerprint[prop_name] != prev_value
+    )
+
+  def set_property_fingerprint(self):
+    self._property_fingerprint = self.calculate_property_fingerprint()
+
   @utils.hybridmethod
   def can((self, cls), perm, key=None, lazy=False):
     if self is not None:
@@ -155,7 +200,8 @@ class AuthedModel(ndb.Model):
     super(AuthedModel, cls)._pre_delete_hook(key)
 
   def _pre_put_hook(self):
-    self.assert_can('update' if self._in_datastore else 'create')
+    self.assert_can('update' if self._property_fingerprint else 'create')
+    self.set_property_fingerprint()
     super(AuthedModel, self)._pre_put_hook()
 
   @classmethod
@@ -169,10 +215,10 @@ class AuthedModel(ndb.Model):
   def _post_get_hook(cls, key, future):
     obj = future.get_result()  # could throw, but what else could we do?
     if obj is not None:
-      obj._in_datastore = True  # pylint: disable=W0212
+      obj.set_property_fingerprint()
       obj.assert_can('read')
       super(AuthedModel, cls)._post_get_hook(key, future)
 
   def _post_query_filter(self):
-    self._in_datastore = True
+    self.set_property_fingerprint()
     return self.can('read') and super(AuthedModel, self)._post_query_filter()

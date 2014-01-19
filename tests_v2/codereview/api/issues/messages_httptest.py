@@ -28,3 +28,11 @@ def Execute(api):
     'lead_text': 'Some really helpful comments!',
     'subject': '1337 Code Review',
   })
+
+  api.logout()
+  api.login('bob@gnarly.com')
+
+  gnarly_xsrf = api.GET('accounts/me').json['data']['xsrf']
+  api.POST('issues/%d/messages' % iid, xsrf=gnarly_xsrf, json={
+    'lead_text': 'LgTm!',
+  })

@@ -42,3 +42,54 @@
       status:
         code: 201
         type: OK
+- request: GET '_ah/login?action=Logout'
+  response:
+    code: 302
+    raw: []
+- request: GET '_ah/login?action=Login&admin=False&email=bob%40gnarly.com'
+  response:
+    code: 302
+    raw: []
+- request: GET 'codereview/api/v2/accounts/me'
+  response:
+    code: 200
+    json:
+      data:
+        created: '2013-12-27 02:29:23.199452'
+        default_column_width: 80
+        default_context: 10
+        email: bob@gnarly.com
+        fresh: true
+        lower_email: bob@gnarly.com
+        lower_nickname: bob (544)
+        modified: '2013-12-27 02:29:23.199452'
+        nickname: bob (544)
+        notify_by_chat: false
+        notify_by_email: true
+        user: bob@gnarly.com
+        xsrf: eyJzdGFtcCI6IDEzODgxMTEzNjMsICJ0YWciOiAiNWU0MDk5NzdjZTkwNzQ2OTVlODRhMDE0OGI3ZGFlM2FjMGZmMjAxZjEyMmUxODEyYjVkOWU3MjZmZmJiNDU1ZiJ9
+      status:
+        code: 200
+        type: OK
+- request: POST 'codereview/api/v2/issues/5629499534213120/messages'
+  response:
+    code: 201
+    json:
+      data:
+        cc:
+        - coolguy@fancydomain.co.uk
+        comment_ids: []
+        created: '2013-12-27 02:29:45.843162'
+        id: 2
+        issue_was_closed: false
+        lead_text: LgTm!
+        patchset_id: null
+        reply_message_id: null
+        sender: bob@gnarly.com
+        status: lgtm
+        subject: A totes awesome haiku
+        to:
+        - test@example.com
+      status:
+        code: 201
+        type: OK
