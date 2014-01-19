@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import collections
+import itertools
 import json
 import re
 
@@ -274,7 +275,7 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
   n_messages = ndb.IntegerProperty(default=0)
   n_patchsets = ndb.IntegerProperty(default=0)
   # {email: bool}
-  approval_status = ndb.JsonProperty(compressed=True)
+  approval_status = ndb.JsonProperty(compressed=True, default={})
   notifications = ndb.JsonProperty(compressed=True)
 
 
@@ -311,13 +312,12 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
         headers = {'Content-Type': 'application/json'}
       ).add_async('issue-notify', transactional=True)
 
-  @ndb.tasklet
   def set_notification_async(self, notification, key):
     self.notifications = self.notifications or {}
     lst = set(self.notifications.setdefault(notification, []))
     lst.update([key.urlsafe()])
     self.notifications[notification] = list(lst)
-    yield self.mark_async()
+    return self.mark_async()
 
   #### Datastore Read Operations
   @utils.cached_property
@@ -394,40 +394,40 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
     yield self.set_notification_async('patchset.create', ps.key)
     raise ndb.Return(ps)
 
-  @ndb.tasklet
   def del_patchset_async(self, ps):
     self.n_patchsets -= 1
     self.n_comments  -= len(ps.raw_comments)
-    yield self.mark_async(), ps.delete_async()
+    return ps.delete_async()
 
   @ndb.tasklet
-  def add_message_async(self, body='', subject=None, drafts=None):
-    if subject is None:
-      subject = self.subject
-    m = Message(
-      id=self.last_message+1, body=body, subject=subject,
-      recipients=self.viewers
-    )
-    # TODO(iannucci): Double-check all upper/lowercase email matching.
-    if not self.approval_status:
-      self.approval_status = {}
-    if m.disapproval:
-      self.approval_status[m.sender] = False
-    elif m.approval:
-      self.approval_status[m.sender] = True
+  def add_message_async(self, lead_text='', subject=None, patchset=None,
+                        message=None, drafts=()):
+    # Convert Drafts to Comments
+    patchsets = yield self.patchsets_async
+    comments = []
+    for draft in drafts:
+      comments.append(
+        patchsets[draft.patchset_id].add_comment_async(
+          draft.to_dict(exclude=('owner', 'created', 'modified', 'deleted'))))
+    comments = yield comments
+
+    self.n_comments += len(comments)
+
+    messages = yield self.messages_async
+    id = self.last_message+1
     self.last_message += 1
     self.n_messages += 1
-    self.n_comments += len(drafts)
 
-    affected_patchsets = yield [d.patchset.get_async() for d in drafts]
-    to_wait = [m.mark_async()]
-    for ps, draft in zip(affected_patchsets, drafts.values()):
-      guts = draft.to_dict()
-      guts.pop('owner', None)
-      guts.pop('created', None)
-      to_wait.append(ps.add_comment_async(guts))
-    yield to_wait
-    (yield self.messages_async).append(m)
+    m = Message.build(
+      id, self.key, lead_text, subject or self.subject, self.editors, self.cc,
+      self.closed, comments, patchset, message)
+    new_id = messages.append(m)
+
+    if m.status:
+      self.approval_status[m.sender.email().lower()] = m.status == 'lgtm'
+
+    yield m.mark_async()
+    assert new_id == m.key.id(), '%r != %r' % (new_id, m.key.id())
     yield self.set_notification_async('message.create', m.key)
     raise ndb.Return(m)
 
@@ -474,24 +474,23 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
     return super(Issue, self).to_dict(include=include, exclude=exclude)
 
 
-def validate_not_empty(_prop, val):
-  if not val:
-    raise exceptions.BadData('Empty comments not allowed.')
-  return val
-
 class Comment(ndb.Model):
   id = None
 
-  patch = ndb.IntegerProperty(indexed=False)
+  patchset_id = ndb.IntegerProperty(indexed=False)
+  patch_id = ndb.IntegerProperty(indexed=False)
   lineno = ndb.IntegerProperty(indexed=False)
   side = EnumProperty(choices=['old', 'new'])
-
-  body = ndb.TextProperty(validator=validate_not_empty)
 
   owner = auth_models.AccountProperty(auto_current_user_add=True, indexed=False)
   created = ndb.DateTimeProperty(auto_now_add=True, indexed=False)
 
   context_line = ndb.TextProperty()
+
+  def _validate_not_empty(_prop, val):  # pylint: disable=E0213
+    if not val:
+      raise exceptions.BadData('Empty comments not allowed.')
+  body = ndb.TextProperty(validator=_validate_not_empty)
 
   def to_dict(self, include=None, exclude=None):
     ret = super(Comment, self).to_dict(include=include, exclude=exclude)
@@ -555,23 +554,17 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin,
     return IDIndexedCollection('$Comment', self.raw_comments, self.key,
                                self.raw_comments.append)
 
-  #### RESTModelMixin overrides
-  @classmethod
-  @ndb.tasklet
-  def read_key_async(cls, key, recurse=False):
-    # TODO(iannucci): Implement recurse
-    # TODO(iannucci): Include patchset CAS entry
-    assert not recurse
-    ent = yield key.get_async()
-    raise ndb.Return(ent.to_dict())
-
   #### Entity manipulation
+  @ndb.tasklet
   def add_comment_async(self, data):
     assert 'created' not in data
     assert 'owner' not in data
+    assert 'modified' not in data
+    assert 'deleted' not in data
     c = Comment(**data)
     c.id = self.comments.append(c)
-    return self.mark_async()
+    yield self.mark_async()
+    raise ndb.Return(c)
 
   #### AuthedModel overrides
   @classmethod
@@ -598,32 +591,71 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin,
     return r
 
 
-class Message(authed_model.AuthedModel):
+class Message(authed_model.AuthedModel, mixins.HierarchyMixin,
+              mixins.IDModelMixin):
   subject = ndb.StringProperty(indexed=False)
   sender = auth_models.AccountProperty(auto_current_user_add=True,
                                        indexed=False)
-  recipients = LowerEmailProperty(indexed=False, repeated=True)
-  body = ndb.TextProperty()
+  cc = LowerEmailProperty(indexed=False, repeated=True)
+  to = LowerEmailProperty(indexed=False, repeated=True)
+  lead_text = ndb.TextProperty()
+  comment_ids = ndb.JsonProperty()  # [[<pset_id>, <comment_id>]...]
+  patchset_id = ndb.IntegerProperty()  # if this is announcing a patchset
+  reply_message_id = ndb.IntegerProperty()  # if this is a reply
 
-  # Automatically set on put()
-  approval = ndb.BooleanProperty(indexed=False, default=False)
-  disapproval = ndb.BooleanProperty(indexed=False, default=False)
+  status = EnumProperty(choices=['lgtm', 'not lgtm'])  # None means neither
   issue_was_closed = ndb.BooleanProperty()
   created = ndb.DateTimeProperty(indexed=False, auto_now_add=True)
 
   #### Hook overrides
-  def _pre_put_hook(self):
-    super(Message, self)._pre_put_hook()
-    self.issue_was_closed = self.root_async.get_result().closed
-    for line in (l.strip() for l in self.body.splitlines()):
-      if line.startswith('>'):
-        continue
-      if 'not lgtm' in line:
-        self.approval = False
-        self.disapproval = True
-        break
-      if 'lgtm' in line:
-        self.approval = True
+  @classmethod
+  def build(cls, id, issue_key, lead_text=None, subject=None, to=(), cc=(),
+            issue_was_closed=None, comments=(), patchset=None, message=None):
+    assert isinstance(issue_was_closed, bool)
+    patchset_id = None if patchset is None else patchset.key.id()
+    reply_message_id = None if message is None else message.key.id()
+
+    status = None
+    # Just find the first line in all the plausible text which may be giving
+    # approval. Be pretty lazy about it.
+    candidates_iter = (
+      lower_line
+      for lower_line in (
+        stripped_line.lower()
+        for stripped_line in (
+          raw_line.lstrip()
+          for text in itertools.chain(
+            [lead_text],
+            (c.body for c in comments)
+          )
+          for raw_line in utils.LazyLineSplitter(text)
+        )
+        if not stripped_line.startswith('>')
+      )
+      if 'lgtm' in lower_line
+    )
+    candidate_line = next(candidates_iter, None)
+    if candidate_line:
+      status = 'not lgtm' if 'not lgtm' in candidate_line else 'lgtm'
+
+    message = cls(
+      id=id, parent=issue_key, lead_text=lead_text, subject=subject, to=to,
+      cc=cc, patchset_id=patchset_id, reply_message_id=reply_message_id,
+      status=status, issue_was_closed=issue_was_closed,
+      comment_ids=[(c.patchset_id, c.id) for c in comments]
+    )
+    # Do this early to fill in auto_now properties.
+    message._prepare_for_put()  # pylint: disable=W0212
+    return message
+
+  @utils.cached_property
+  @ndb.tasklet
+  def comments_async(self):
+    issue = yield self.root_async
+    patchsets = yield issue.patchsets_async
+    raise ndb.Return(
+      [patchsets[psid].comments[cid]
+       for psid, cid in self.comment_ids.values()])
 
   #### AuthedModel overrides
   @classmethod
@@ -635,7 +667,6 @@ class Message(authed_model.AuthedModel):
 
 
 class DraftComment(Comment):
-  patchset = ndb.IntegerProperty(indexed=False)
   modified = ndb.DateTimeProperty(auto_now=True)
 
   deleted = ndb.BooleanProperty(default=False)
@@ -660,8 +691,8 @@ class IssueMetadata(authed_model.AuthedModel):
   @ndb.tasklet
   def add_draft_async(self, patch_key, body, side, lineno):
     d_ent = DraftComment(
-      patch=patch_key.id(),
-      patchset=patch_key.parent().id(),
+      patch_id=patch_key.id(),
+      patchset_id=patch_key.parent().id(),
 
       body=body,
       lineno=lineno,

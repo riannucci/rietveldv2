@@ -19,19 +19,20 @@ def set_up_single_comment(api):
     iid, xsrf = create_issue_httptest.set_up_single_issue(api)
     api.logout()
 
-  api.POST('issues/%d/patchsets/1/patches/1/drafts' % iid, xsrf=xsrf, json={
+  comment = {
     'body': 'I like this line very much.\nMaybe if it had more syllables?',
     'lineno': 2,
     'side': 'old',
-  })
+  }
+
+  api.POST('issues/%d/patchsets/1/patches/1/drafts' % iid, xsrf=xsrf,
+           json=comment)
 
   api.login()
 
-  api.POST('issues/%d/patchsets/1/patches/1/drafts' % iid, xsrf=xsrf, json={
-    'body': 'I like this line very much.\nMaybe if it had more syllables?',
-    'lineno': 2,
-    'side': 'old',
-  })
+  api.POST('issues/%d/patchsets/1/patches/1/drafts' % iid, xsrf=xsrf,
+           json=comment)
+
   return iid, xsrf
 
 

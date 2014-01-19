@@ -62,14 +62,15 @@ class HierarchyMixin(object):
       raise ndb.Return(ret)
 
   @ndb.tasklet
-  def mark_async(self, operation='write', meta=False):
+  def mark_async(self, operation='write'):
     dirty = yield self.dirty_entities_async
+    if self in dirty[operation]:
+      return
     dirty[operation].add(self)
 
-    if not meta:
-      parent = yield self.parent_async
-      if parent is not self:
-        yield parent.mark_async(operation, meta)
+    parent = yield self.parent_async
+    if parent is not self:
+      yield parent.mark_async(operation)
 
   @ndb.tasklet
   def clear_marks_async(self):

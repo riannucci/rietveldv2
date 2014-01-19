@@ -321,22 +321,35 @@ class Messages(rest_handler.RESTCollectionHandler):
   PARENT = Issues
 
   @ndb.transactional_tasklet(xg=True)  # pylint: disable=E1120
-  def post(self, key, message='', subject='', send_message=True):
+  def post(self, key, reply_message_id=None, patchset_id=None, **data):
     issue_key = key.parent()
-    issue, metadata = yield [
-      safe_get(issue_key),
-      safe_get(issue_models.Issue.metadata_key(issue_key)),
-    ]
-    drafts = metadata.drafts
-    del metadata.drafts
+    mdata_future = issue_models.Issue.key_metadata_async(issue_key)
 
-    msg, _ = yield [
-      issue.add_message_async(message, subject, comments=drafts,
-                              send_message=send_message),
-      issue.modify_from_dict_async(issue or {})
-    ]
+    issue = yield safe_get(issue_key)
+
+    # Ensure that referenced patchset/message exist and are accessible by the
+    # current user.
+    patchset = utils.NONE_FUTURE
+    if patchset_id:
+      patchset = issue.patchsets_async[patchset_id]
+    message = utils.NONE_FUTURE
+    if reply_message_id:
+      message = issue.messages_async[reply_message_id]
+    patchset, message, metadata = yield patchset, message, mdata_future
+
+    drafts = metadata.drafts.values()
+    metadata.clear_drafts()
+
+    # TODO(iannucci): Add back send_message boolean.
+
+    # TODO(iannucci): Should we allow issue to be updated simultaneously with
+    # the message being set (ala Issues.put)? This may be the only atomic way
+    # to post a Message and change the cc/reviewers at the same time.
+    msg = yield issue.add_message_async(
+      drafts=drafts, message=message, patchset=patchset, **data)
+
     yield issue.flush_to_ds_async(), metadata.put_async()
-    raise ndb.Return({STATUS_CODE: 201, 'id': msg.key.id()})
+    raise ndb.Return({STATUS_CODE: 201, 'data': msg.to_dict()})
 
   def get(self, key):
     issue = yield safe_get(key.parent())

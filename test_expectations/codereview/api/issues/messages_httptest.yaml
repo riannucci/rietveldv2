@@ -1,0 +1,44 @@
+- request: POST 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts'
+  response:
+    code: 200
+    json:
+      data:
+        body: This line is kinda meh though
+        context_line: Waters move softly
+        created: '2013-12-27 02:27:31.575679'
+        id: 2
+        lineno: 1
+        modified: '2013-12-27 02:27:31.575679'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: new
+      status:
+        code: 200
+        type: OK
+- request: POST 'codereview/api/v2/issues/5629499534213120/messages'
+  response:
+    code: 201
+    json:
+      data:
+        cc:
+        - coolguy@fancydomain.co.uk
+        comment_ids:
+        - - 1
+          - 1
+        - - 1
+          - 2
+        created: '2013-12-27 02:27:47.268260'
+        id: 1
+        issue_was_closed: false
+        lead_text: Some really helpful comments!
+        patchset_id: null
+        reply_message_id: null
+        sender: test@example.com
+        status: null
+        subject: 1337 Code Review
+        to:
+        - test@example.com
+      status:
+        code: 201
+        type: OK

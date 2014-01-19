@@ -41,7 +41,7 @@ def constant_time_equals(a, b):
 
 
 class LazyLineSplitter(collections.Sequence):
-  def __init__(self, data, lineending):
+  def __init__(self, data, lineending='\n'):
     self._data = data
     self._offsets = []
 

@@ -26,8 +26,8 @@
         lineno: 2
         modified: '2013-12-27 02:28:04.724024'
         owner: test@example.com
-        patch: 1
-        patchset: 1
+        patch_id: 1
+        patchset_id: 1
         side: old
       status:
         code: 200
@@ -42,10 +42,10 @@
         created: '2013-12-27 02:28:04.724024'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:25.041115'
+        modified: '2013-12-27 02:28:24.941115'
         owner: test@example.com
-        patch: 1
-        patchset: 1
+        patch_id: 1
+        patchset_id: 1
         side: old
       status:
         code: 200
@@ -60,10 +60,10 @@
         created: '2013-12-27 02:28:04.724024'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:25.041115'
+        modified: '2013-12-27 02:28:24.941115'
         owner: test@example.com
-        patch: 1
-        patchset: 1
+        patch_id: 1
+        patchset_id: 1
         side: old
       status:
         code: 200
@@ -78,10 +78,10 @@
         created: '2013-12-27 02:28:04.724024'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:25.041115'
+        modified: '2013-12-27 02:28:24.941115'
         owner: test@example.com
-        patch: 1
-        patchset: 1
+        patch_id: 1
+        patchset_id: 1
         side: old
       status:
         code: 200
