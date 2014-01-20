@@ -82,8 +82,16 @@ coverage:
 	$(COVERAGE) run --branch tests/run_tests.py $(SDK_PATH)
 	$(COVERAGE) html --include="codereview/*"
 
+third_party: mapreduce third_party/requests
+
 # Checkout mapreduce library and apply a little patch.
 # See https://code.google.com/p/appengine-mapreduce/issues/detail?id=174
 mapreduce:
 	svn co -r 491 http://appengine-mapreduce.googlecode.com/svn/trunk/python/src/mapreduce
 	cd mapreduce/ && patch < ../mapreduce.patch
+
+third_party/requests:
+	cd third_party && git clone git://github.com/kennethreitz/requests.git --branch v2.2.0
+
+uploadv2.pyz: third_party $(shell find uploadv2 -type f) pack_upload_script.py
+	python pack_upload_script.py uploadv2 uploadv2.pyz
