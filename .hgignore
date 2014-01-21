@@ -14,3 +14,4 @@ workspace.xml
 mapreduce
 uploadv2.pyz
 /third_party/requests
+/uploadv2/third_party/requests

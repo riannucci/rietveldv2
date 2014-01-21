@@ -30,32 +30,22 @@ def main():
   # module unusable by other pythons. It also makes it harder to inspect/debug.
   ok_exts = set(('.pyc', '.py'))
 
-  with open('%s/deps.json' % indir) as depsfile:
-    deps = json.load(depsfile)
-
-  # Deps is { prefix: source }, so add in indir for convenience.
-  deps[''] = indir
-
   with open(outfile, 'w') as raw_file:
     raw_file.write('#!/usr/bin/env python\n')
     zf = zipfile.ZipFile(raw_file, mode='w',
                         compression=zipfile.ZIP_DEFLATED)
     with zf:
-      for prefix, sourcedir in deps.iteritems():
-        sourcedir = os.path.abspath(sourcedir)
-        compileall.compile_dir(sourcedir, quiet=True)
+      compileall.compile_dir(indir, quiet=True)
 
-        for basedir, _, files in os.walk(sourcedir):
-          for fname in files:
-            if os.path.splitext(fname)[-1] not in ok_exts:
-              continue
-            fs_path = os.path.join(basedir, fname)
+      for basedir, _, files in os.walk(indir, followlinks=True):
+        for fname in files:
+          if os.path.splitext(fname)[-1] not in ok_exts:
+            continue
+          fs_path = os.path.join(basedir, fname)
 
-            arcname = fs_path[len(sourcedir)+1:]
-            if prefix:
-              arcname = os.path.join(prefix, arcname)
+          arcname = fs_path[len(indir)+1:]
 
-            zf.write(fs_path, arcname)
+          zf.write(fs_path, arcname)
   os.chmod(outfile, 0755)
 
 if __name__ == '__main__':

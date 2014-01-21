@@ -93,5 +93,9 @@ mapreduce:
 third_party/requests:
 	cd third_party && git clone git://github.com/kennethreitz/requests.git --branch v2.2.0
 
-uploadv2.pyz: third_party $(shell find uploadv2 -type f) pack_upload_script.py
-	python pack_upload_script.py uploadv2 uploadv2.pyz
+uploadv2/third_party/requests: third_party/requests
+	cd uploadv2/third_party && ln -s ../../third_party/requests/requests
+
+uploadv2.pyz: third_party $(shell find uploadv2 -type f) pack_module.py \
+							uploadv2/third_party/requests
+	python pack_module.py uploadv2 uploadv2.pyz
