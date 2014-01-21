@@ -15,7 +15,6 @@
 """Generates a python executable zip-module from a python module dir."""
 
 import compileall
-import json
 import os
 import sys
 import zipfile
@@ -36,6 +35,18 @@ def main():
                         compression=zipfile.ZIP_DEFLATED)
     with zf:
       compileall.compile_dir(indir, quiet=True)
+
+      # TODO(iannucci): Do this without recursing twice
+
+      # Find all links and compile them
+      for basedir, dirs, _ in os.walk(indir):
+        for dname in dirs:
+          fs_path = os.path.join(basedir, dname)
+          if os.path.islink(fs_path):
+            dest = os.path.normpath(
+              os.path.join(basedir, os.readlink(fs_path)))
+            if os.path.isdir(dest):
+              compileall.compile_dir(dest, quiet=True)
 
       for basedir, _, files in os.walk(indir, followlinks=True):
         for fname in files:
