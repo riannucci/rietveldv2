@@ -164,7 +164,7 @@ def run_all_tests():
       })
 
     os.makedirs(os.path.dirname(usercustomize_file))
-    shutil.copyfile(os.path.join(TEST_ROOT_PATH, 'usercustomize.tpl'),
+    shutil.copyfile(os.path.join(TEST_ROOT_PATH, 'usercustomize.py'),
                     usercustomize_file)
 
     os.environ['PYTHONUSERBASE'] = tmp_dir
