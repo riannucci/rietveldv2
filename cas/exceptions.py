@@ -17,6 +17,10 @@ class CASError(Exception):
   pass
 
 
+class CASDuplicateEntry(CASError):
+  STATUS_CODE = 400
+
+
 class CASValidationError(CASError):
   STATUS_CODE = 400
 
@@ -27,7 +31,7 @@ class CASUnknownContentType(CASError):
   def __init__(self, type_map, content_type):
     self.type_map = type_map
     self.content_type = content_type
-    super(CASUnknownDataType, self).__init__(
+    super(CASUnknownContentType, self).__init__(
       "Unknown content_type: %s" % content_type)
 
 

@@ -191,6 +191,36 @@
       status:
         code: 400
         type: ERROR
+- request: POST 'codereview/api/v2/issues'
+  response:
+    code: 403
+    comments:
+    - Should fail because insufficient proof.
+    json:
+      data:
+        msg: You do not have permission to create issue due to insufficient proof
+          for 214cf04c429f54b3f5398b9b7c767d49ad4489c9f09b235617db1286e5a403b9.
+      status:
+        code: 403
+        type: ERROR
+- request: GET 'codereview/api/v2/cas_entries/lookup?json=H4sIAAMZ4lIC%2F6XOXQrCMBAE4KuUPCsm2d0061VEZLNNsKBVbAR%2F6N1tffEAvs7AzLd7Gx3vZ7Nt%0AjHeoxaKi50KYoBBwTJxabUPbIUuHGFm5WE4eKLi2S87HkEnQQmKzaowe5Tbmuszda1nHb3YZah7q%0AoT6veSlqftTN9ST9sLRj%2F1rSwNOq%2BVms9aRUUABYrTALiCOZ39T6NNs4SbTOhaAQmDM7UJjNM5VK%0A0D8tNO0%2FVdwfyRgBAAA%3D&compress=1'
+  response:
+    code: 200
+    json:
+      data:
+      - charset: utf-8
+        content_type: text/plain
+        csum: 214cf04c429f54b3f5398b9b7c767d49ad4489c9f09b235617db1286e5a403b9
+        salt: rD00maqzPZFM4LshE9+h9Rrp1D2SGfBZ91htgd+IdqM=
+        size: 69
+      - charset: utf-8
+        content_type: text/plain
+        csum: 0025c5f4a339c0a99a3a15a286c02bb3f9ba801166c3699e913c34b3c765f6c9
+        salt: gyrSpgkHriU3GgE6SJwYkHMp1OouC0BR/krV5Bo3KwI=
+        size: 65
+      status:
+        code: 200
+        type: OK
 - request: GET 'codereview/api/v2/issues/5629499534213120/patchsets'
   response:
     code: 200

@@ -153,7 +153,8 @@ class CAS_ID(object):
     def txn():
       if (yield self.key.get_async()) is not None:
         logging.error("Attempted to create('%s') which already exists" % self)
-        raise exceptions.CASError("CASEntry('%s') already exists." % self)
+        raise cas_exceptions.CASDuplicateEntry(
+          "CASEntry('%s') already exists." % self)
 
       # TODO(iannucci): Implement delayed validation by storing the object as
       # an UnvalidatedCASEntry, and then fire a taskqueue task to promote it to
@@ -235,6 +236,8 @@ class CAS_ID(object):
   @ndb.non_transactional
   @ndb.tasklet
   def prove_async(self, proofs, action, include_self=False):
+    proofs = proofs or {}
+
     if include_self:
       data, entry = yield (self.data_async(), self.entry_async())
       refs = [x.entry_async() for x in data.CAS_REFERENCES] + [entry]
@@ -245,7 +248,7 @@ class CAS_ID(object):
     for cas_entry in (yield refs):
       csum = cas_entry.cas_id.csum
       # TODO(iannucci): This could be parallelized if prove_ownership was async
-      if not cas_entry.prove_ownership(proofs[csum]):
+      if csum not in proofs or not cas_entry.prove_ownership(proofs[csum]):
         raise exceptions.Forbidden(
           '%s due to insufficient proof for %s' % (action, csum))
 

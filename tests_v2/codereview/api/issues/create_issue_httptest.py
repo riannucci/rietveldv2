@@ -172,6 +172,18 @@ def Execute(api):
   api.comment('Should fail because we cannot send a message without anyone to '
               'send it to')
 
+  api.POST('issues',
+           json={
+             'cc': [], 'reviewers': [],
+             'patchset': PATCHSET_CAS_ID
+           },
+           xsrf=xsrf)
+  api.comment('Should fail because insufficient proof.')
+
+  ents = api.GET('cas_entries/lookup',
+                 json=[FILE_BEFORE_CAS_ID, FILE_AFTER_CAS_ID],
+                 compress=True).json['data']
+
   api.GET('issues/%d/patchsets' % iid)
 
   api.GET('issues/%d/patchsets/1' % iid)

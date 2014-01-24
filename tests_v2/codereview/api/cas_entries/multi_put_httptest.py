@@ -50,4 +50,8 @@ def Execute(api):
   api.PUT('cas_entries', json=ex_files, xsrf=me['data']['xsrf'],
           compress=True)
 
+  api.PUT('cas_entries', json=ex_files, xsrf=me['data']['xsrf'],
+          compress=True)
+  api.comment('Should fail because some entries already exist')
+
   api.GET('cas_entries/lookup', json=cas_ids)

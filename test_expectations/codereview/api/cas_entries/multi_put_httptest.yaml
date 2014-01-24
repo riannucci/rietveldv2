@@ -43,6 +43,18 @@
       status:
         code: 200
         type: OK
+- request: PUT 'codereview/api/v2/cas_entries'
+  response:
+    code: 400
+    comments:
+    - Should fail because some entries already exist
+    json:
+      data:
+        msg: CASEntry('8fa221197fd3dab7772e6f55c951d3e956f5f2b2dbae6c94633ca3171ee236b0:61440:application/octet-stream')
+          already exists.
+      status:
+        code: 400
+        type: ERROR
 - request: GET 'codereview/api/v2/cas_entries/lookup?json=W3siY3N1bSI6ICI4ZmEyMjExOTdmZDNkYWI3NzcyZTZmNTVjOTUxZDNlOTU2ZjVmMmIyZGJhZTZj%0AOTQ2MzNjYTMxNzFlZTIzNmIwIiwgImNvbnRlbnRfdHlwZSI6ICJhcHBsaWNhdGlvbi9vY3RldC1z%0AdHJlYW0iLCAic2l6ZSI6IDYxNDQwfSwgeyJjc3VtIjogIjA1YjZjNWM2NDBkMThkNDhjM2VhMzBm%0AYmZiMTg2ZTc2YzU2Y2RiNGY1MGI0MDZkZjlkOGMxMDEyNDdjNTBlNTUiLCAiY29udGVudF90eXBl%0AIjogImFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbSIsICJzaXplIjogNjE0NDB9LCB7ImNzdW0iOiAi%0AZmVlZGZhY2U0MGQxOGQ0OGMzZWEzMGZiZmIxODZlNzZjNTZjZGI0ZjUwYjQwNmRmOWQ4YzEwMTI0%0AN2M1MGU1NSIsICJjb250ZW50X3R5cGUiOiAiYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtIiwgInNp%0AemUiOiA2MTQ0MH1d'
   response:
     code: 200

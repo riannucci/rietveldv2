@@ -61,7 +61,7 @@ class IDIndexedCollection(collections.MutableMapping):
 
   def __setitem__(self, id, value):
     next_id = len(self._items) + 1
-    if id != next_id:
+    if id != next_id:  # pragma: no cover
       raise exceptions.FrameworkException('Setting wrong id %s' % id)
     if self.append_callback:
       self.append_callback(value)
