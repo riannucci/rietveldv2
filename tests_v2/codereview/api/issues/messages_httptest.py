@@ -24,6 +24,10 @@ def Execute(api):
     'side': 'new',
   })
 
+  api.GET('issues/%d/drafts' % iid)
+
+  api.GET('issues/%d/drafts/2' % iid)
+
   api.POST('issues/%d/messages' % iid, xsrf=xsrf, json={
     'lead_text': 'Some really helpful comments!',
     'subject': '1337 Code Review',

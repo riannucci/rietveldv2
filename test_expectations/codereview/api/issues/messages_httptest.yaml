@@ -16,6 +16,54 @@
       status:
         code: 200
         type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/drafts'
+  response:
+    code: 200
+    json:
+      data:
+      - body: 'I like this line very much.
+
+          Maybe if it had more syllables?'
+        context_line: The lake gently beckons you
+        created: '2013-12-27 02:26:58.653852'
+        id: 1
+        lineno: 2
+        modified: '2013-12-27 02:27:31.575679'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: old
+      - body: This line is kinda meh though
+        context_line: Waters move softly
+        created: '2013-12-27 02:27:31.575679'
+        id: 2
+        lineno: 1
+        modified: '2013-12-27 02:27:31.575679'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: new
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/drafts/2'
+  response:
+    code: 200
+    json:
+      data:
+        body: This line is kinda meh though
+        context_line: Waters move softly
+        created: '2013-12-27 02:27:31.575679'
+        id: 2
+        lineno: 1
+        modified: '2013-12-27 02:27:31.575679'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: new
+      status:
+        code: 200
+        type: OK
 - request: POST 'codereview/api/v2/issues/5629499534213120/messages'
   response:
     code: 201
@@ -28,7 +76,7 @@
           - 1
         - - 1
           - 2
-        created: '2013-12-27 02:27:47.268260'
+        created: '2013-12-27 02:28:46.485788'
         id: 1
         issue_was_closed: false
         lead_text: Some really helpful comments!
@@ -55,19 +103,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:29:23.199452'
+        created: '2013-12-27 02:30:18.451503'
         default_column_width: 80
         default_context: 10
         email: bob@gnarly.com
         fresh: true
         lower_email: bob@gnarly.com
         lower_nickname: bob (544)
-        modified: '2013-12-27 02:29:23.199452'
+        modified: '2013-12-27 02:30:18.451503'
         nickname: bob (544)
         notify_by_chat: false
         notify_by_email: true
         user: bob@gnarly.com
-        xsrf: eyJzdGFtcCI6IDEzODgxMTEzNjMsICJ0YWciOiAiNWU0MDk5NzdjZTkwNzQ2OTVlODRhMDE0OGI3ZGFlM2FjMGZmMjAxZjEyMmUxODEyYjVkOWU3MjZmZmJiNDU1ZiJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTE0MTgsICJ0YWciOiAiNzZjOGRjOWFmMmUwODEzMWEwNDMxMGY0ODYxOGEyMGRmMGY0ZDk3ZTNmOTliZWJjODA5ZDFiOTQ5ZTgxOTZlNiJ9
       status:
         code: 200
         type: OK
@@ -79,7 +127,7 @@
         cc:
         - coolguy@fancydomain.co.uk
         comment_ids: []
-        created: '2013-12-27 02:29:45.843162'
+        created: '2013-12-27 02:30:56.412568'
         id: 2
         issue_was_closed: false
         lead_text: LgTm!

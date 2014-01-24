@@ -136,6 +136,17 @@
       status:
         code: 200
         type: OK
+- request: POST 'codereview/api/v2/issues'
+  response:
+    code: 400
+    comments:
+    - Should fail because we cannot send a message without anyone to send it to
+    json:
+      data:
+        msg: Cannot send_message with no-one to send to.
+      status:
+        code: 400
+        type: ERROR
 - request: GET 'codereview/api/v2/issues/5629499534213120/patchsets'
   response:
     code: 200

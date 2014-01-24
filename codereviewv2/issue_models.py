@@ -344,8 +344,7 @@ class Issue(authed_model.AuthedModel, mixins.HideableModelMixin,
 
     cur_user_key = auth_models.Account.current_user_key()
     if cur_user_key:
-      key = ndb.Key(
-        pairs=(cur_user_key.pairs() + (('IssueMetadata', issue_key.id()),)))
+      key = ndb.Key('IssueMetadata', issue_key.id(), parent=cur_user_key)
       ent = yield key.get_async()
       if ent is None:
         ent = IssueMetadata(key=key)

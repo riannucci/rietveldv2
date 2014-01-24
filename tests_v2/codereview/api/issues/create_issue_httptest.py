@@ -119,6 +119,15 @@ def set_up_single_issue(api):
 def Execute(api):
   iid, xsrf = set_up_single_issue(api)
 
+  api.POST('issues',
+           json={
+             'send_message': True, 'cc': [], 'reviewers': [],
+             'patchset': PATCHSET_CAS_ID
+           },
+           xsrf=xsrf)
+  api.comment('Should fail because we cannot send a message without anyone to '
+              'send it to')
+
   api.GET('issues/%d/patchsets' % iid)
 
   api.GET('issues/%d/patchsets/1' % iid)

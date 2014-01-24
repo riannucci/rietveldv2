@@ -97,14 +97,12 @@ class Drafts(rest_handler.RESTCollectionHandler):
 
   @ndb.tasklet
   def get(self, key):
-    metadata_key = issue_models.Issue.metadata_key(key.parent())
-    metadata = yield safe_get(metadata_key)
-    raise ndb.Return([d.to_dict() for d in metadata.drafts])
+    metadata = yield issue_models.Issue.key_metadata_async(key.parent())
+    raise ndb.Return([d.to_dict() for d in metadata.drafts.itervalues()])
 
   @ndb.tasklet
   def get_one(self, key):
-    metadata_key = issue_models.Issue.metadata_key(key.parent())
-    metadata = yield safe_get(metadata_key)
+    metadata = yield issue_models.Issue.key_metadata_async(key.parent())
     raise ndb.Return(metadata.drafts[key.id()].to_dict())
 
 
