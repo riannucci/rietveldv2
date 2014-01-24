@@ -333,14 +333,14 @@ class Messages(rest_handler.RESTCollectionHandler):
     # current user.
     patchsets = utils.completed_future({})
     if patchset_id:
-      patchsets = issue.patchsets_async[patchset_id]
+      patchsets = issue.patchsets_async
     messages = utils.completed_future({})
     if reply_message_id:
-      messages = issue.messages_async[reply_message_id]
+      messages = issue.messages_async
     patchsets, messages, metadata = yield patchsets, messages, mdata_future
 
-    patchset = messages.get(patchset_id)
-    message = patchsets.get(reply_message_id)
+    patchset = patchsets.get(patchset_id)
+    message = messages.get(reply_message_id)
 
     drafts = metadata.drafts.values()
     metadata.clear_drafts()
@@ -354,16 +354,17 @@ class Messages(rest_handler.RESTCollectionHandler):
       drafts=drafts, message=message, patchset=patchset, **data)
 
     yield issue.flush_to_ds_async(), metadata.put_async()
-    raise ndb.Return(msg.to_dict())
+    raise ndb.Return((yield msg.to_dict_async()))
 
   @ndb.tasklet
   def get(self, key):
     issue = yield safe_get(key.parent())
     messages = yield issue.messages_async
-    raise ndb.Return([m.to_dict() for m in messages.itervalues()])
+    dicts = yield [m.to_dict_async() for m in messages.itervalues()]
+    raise ndb.Return(dicts)
 
   @ndb.tasklet
   def get_one(self, key):
     issue = yield safe_get(key.parent())
     messages = yield issue.messages_async
-    raise ndb.Return(messages[key.id()].to_dict())
+    raise ndb.Return((yield messages[key.id()].to_dict_async()))

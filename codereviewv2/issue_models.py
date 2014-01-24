@@ -689,11 +689,35 @@ class Message(authed_model.AuthedModel, mixins.HierarchyMixin,
 
   #### Model overrides
   def to_dict(self, include=None, exclude=None):
+    return self.to_dict_async(include, exclude).get_result()
+
+  @ndb.tasklet
+  def to_dict_async(self, include=None, exclude=None):
     exclude = set(exclude or ())
-    exclude.add('comment_ids')
+    exclude.update(('comment_ids', 'patchset_id', 'reply_message_id'))
     ret = super(Message, self).to_dict(include=include, exclude=exclude)
-    ret['comments'] = [c.to_dict() for c in self.comments_async.get_result()]
-    return ret
+
+    comments = self.comments_async
+    issue = yield self.root_async
+
+    patchsets = utils.completed_future({})
+    if self.patchset_id:
+      patchsets = issue.patchsets_async
+    messages = utils.completed_future({})
+    if self.reply_message_id:
+      messages = issue.messages_async
+
+    patchsets, messages = yield patchsets, messages
+
+    ret['comments'] = [c.to_dict() for c in (yield comments)]
+    ret['patchset'] = None
+    if self.patchset_id:
+      ret['patchset'] = patchsets[self.patchset_id].to_dict()
+    ret['reply_message'] = None
+    if self.reply_message_id:
+      ret['reply_message'] = messages[self.reply_message_id].to_dict()
+
+    raise ndb.Return(ret)
 
 
 class DraftComment(Comment):

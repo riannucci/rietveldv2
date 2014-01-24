@@ -55,3 +55,19 @@ def Execute(api):
   api.GET('issues/%d/messages' % iid)
 
   api.GET('issues/%d/messages/1' % iid)
+
+  # TODO(iannucci): Should the to_dict recursion be limited? i.e. should we see
+  # the comments in the patchset and/or the reply_message? Right now we see
+  # everything. Maybe we should just get the raw id's back?
+  api.POST('issues/%d/messages' % iid, xsrf=gnarly_xsrf, json={
+    'lead_text': 'No comments in this one',
+    'subject': 'A totes-fine message',
+    'patchset_id': 1
+  })
+
+  api.POST('issues/%d/messages' % iid, xsrf=gnarly_xsrf, json={
+    'lead_text': 'This is a reply',
+    # TODO(iannucci): should the RE: be automatic?
+    'subject': 'RE: 1337 Code Review',
+    'reply_message_id': 1
+  })

@@ -96,8 +96,8 @@
         id: 1
         issue_was_closed: false
         lead_text: Some really helpful comments!
-        patchset_id: null
-        reply_message_id: null
+        patchset: null
+        reply_message: null
         sender: test@example.com
         status: null
         subject: 1337 Code Review
@@ -147,8 +147,8 @@
         id: 2
         issue_was_closed: false
         lead_text: LgTm!
-        patchset_id: null
-        reply_message_id: null
+        patchset: null
+        reply_message: null
         sender: bob@gnarly.com
         status: lgtm
         subject: A totes awesome haiku
@@ -281,8 +281,8 @@
         id: 1
         issue_was_closed: false
         lead_text: Some really helpful comments!
-        patchset_id: null
-        reply_message_id: null
+        patchset: null
+        reply_message: null
         sender: test@example.com
         status: null
         subject: 1337 Code Review
@@ -295,8 +295,8 @@
         id: 2
         issue_was_closed: false
         lead_text: LgTm!
-        patchset_id: null
-        reply_message_id: null
+        patchset: null
+        reply_message: null
         sender: bob@gnarly.com
         status: lgtm
         subject: A totes awesome haiku
@@ -337,8 +337,8 @@
         id: 1
         issue_was_closed: false
         lead_text: Some really helpful comments!
-        patchset_id: null
-        reply_message_id: null
+        patchset: null
+        reply_message: null
         sender: test@example.com
         status: null
         subject: 1337 Code Review
@@ -346,4 +346,112 @@
         - test@example.com
       status:
         code: 200
+        type: OK
+- request: POST 'codereview/api/v2/issues/5629499534213120/messages'
+  response:
+    code: 201
+    json:
+      data:
+        cc:
+        - coolguy@fancydomain.co.uk
+        comments: []
+        created: '2013-12-27 02:35:56.604015'
+        id: 3
+        issue_was_closed: false
+        lead_text: No comments in this one
+        patchset:
+          comments:
+          - body: 'I like this line very much.
+
+              Maybe if it had more syllables?'
+            context_line: The lake gently beckons you
+            created: '2013-12-27 02:30:18.551503'
+            id: 1
+            lineno: 2
+            owner: test@example.com
+            patch_id: 1
+            patchset_id: 1
+            side: old
+          - body: This line is kinda meh though
+            context_line: Waters move softly
+            created: '2013-12-27 02:30:18.551503'
+            id: 2
+            lineno: 1
+            owner: test@example.com
+            patch_id: 1
+            patchset_id: 1
+            side: new
+          created: '2013-12-27 02:24:47.520533'
+          created_by: test@example.com
+          data_ref:
+            charset: utf-8
+            content_type: application/patchset+json
+            csum: 3844064d4b539405aa865e15aa232d21d94e8b02861552cedbad6a79faf9188c
+            size: 509
+          id: 1
+          message: null
+        reply_message: null
+        sender: bob@gnarly.com
+        status: null
+        subject: A totes-fine message
+        to:
+        - test@example.com
+      status:
+        code: 201
+        type: OK
+- request: POST 'codereview/api/v2/issues/5629499534213120/messages'
+  response:
+    code: 201
+    json:
+      data:
+        cc:
+        - coolguy@fancydomain.co.uk
+        comments: []
+        created: '2013-12-27 02:36:31.849668'
+        id: 4
+        issue_was_closed: false
+        lead_text: This is a reply
+        patchset: null
+        reply_message:
+          cc:
+          - coolguy@fancydomain.co.uk
+          comments:
+          - body: 'I like this line very much.
+
+              Maybe if it had more syllables?'
+            context_line: The lake gently beckons you
+            created: '2013-12-27 02:30:18.551503'
+            id: 1
+            lineno: 2
+            owner: test@example.com
+            patch_id: 1
+            patchset_id: 1
+            side: old
+          - body: This line is kinda meh though
+            context_line: Waters move softly
+            created: '2013-12-27 02:30:18.551503'
+            id: 2
+            lineno: 1
+            owner: test@example.com
+            patch_id: 1
+            patchset_id: 1
+            side: new
+          created: '2013-12-27 02:30:18.551503'
+          id: 1
+          issue_was_closed: false
+          lead_text: Some really helpful comments!
+          patchset: null
+          reply_message: null
+          sender: test@example.com
+          status: null
+          subject: 1337 Code Review
+          to:
+          - test@example.com
+        sender: bob@gnarly.com
+        status: null
+        subject: 'RE: 1337 Code Review'
+        to:
+        - test@example.com
+      status:
+        code: 201
         type: OK
