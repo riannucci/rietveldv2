@@ -112,3 +112,79 @@
       status:
         code: 404
         type: ERROR
+- request: PUT 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts'
+  response:
+    code: 200
+    json:
+      data:
+      - body: This is just crazy...
+        context_line: Waters move softly
+        created: '2013-12-27 02:32:55.871176'
+        id: 2
+        lineno: 1
+        modified: '2013-12-27 02:32:55.871176'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: old
+      - body: I can put multiple drafts
+        context_line: The hat gently pokes you
+        created: '2013-12-27 02:32:55.871176'
+        id: 3
+        lineno: 2
+        modified: '2013-12-27 02:32:55.871176'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: new
+      - body: At the same time!?
+        context_line: Slip into it's grave
+        created: '2013-12-27 02:32:55.871176'
+        id: 1
+        lineno: 3
+        modified: '2013-12-27 02:32:55.871176'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: old
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/drafts'
+  response:
+    code: 200
+    json:
+      data:
+      - body: At the same time!?
+        context_line: Slip into it's grave
+        created: '2013-12-27 02:32:55.871176'
+        id: 1
+        lineno: 3
+        modified: '2013-12-27 02:32:55.871176'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: old
+      - body: This is just crazy...
+        context_line: Waters move softly
+        created: '2013-12-27 02:32:55.871176'
+        id: 2
+        lineno: 1
+        modified: '2013-12-27 02:32:55.871176'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: old
+      - body: I can put multiple drafts
+        context_line: The hat gently pokes you
+        created: '2013-12-27 02:32:55.871176'
+        id: 3
+        lineno: 2
+        modified: '2013-12-27 02:32:55.871176'
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: new
+      status:
+        code: 200
+        type: OK

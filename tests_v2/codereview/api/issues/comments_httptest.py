@@ -52,3 +52,25 @@ def Execute(api):
   api.GET('issues/%d/patchsets/1/patches/1/drafts' % iid)
 
   api.GET('issues/%d/patchsets/1/patches/1/drafts/1' % iid)
+
+  api.PUT('issues/%d/patchsets/1/patches/1/drafts' % iid,
+          json=[
+            {
+              'body': 'This is just crazy...',
+              'lineno': 1,
+              'side': 'old',
+            },
+            {
+              'body': 'I can put multiple drafts',
+              'lineno': 2,
+              'side': 'new',
+            },
+            {
+              'body': 'At the same time!?',
+              'lineno': 3,
+              'side': 'old',
+            }
+          ],
+          xsrf=xsrf)
+
+  api.GET('issues/%d/drafts' % iid)

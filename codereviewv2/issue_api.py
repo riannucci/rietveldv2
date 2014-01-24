@@ -252,13 +252,15 @@ class PatchComments(rest_handler.RESTCollectionHandler):
     patch_key = key.parent()
     ps = yield safe_get(patch_key.parent())
     patches = yield ps.patches_async
-    ret = [c.to_dict() for c in patches[key.id()].comments]
-    raise ndb.Return(ret)
+    raise ndb.Return([c.to_dict()
+                      for c in patches[patch_key.id()].comments.itervalues()])
 
   @ndb.tasklet
-  def get_one(self, key, **data):
-    comments = yield self.get(key, **data)
-    raise ndb.Return(comments[key.id()].to_dict())
+  def get_one(self, key):
+    patch_key = key.parent()
+    ps = yield safe_get(patch_key.parent())
+    patches = yield ps.patches_async
+    raise ndb.Return(patches[patch_key.id()].comments[key.id()].to_dict())
 
 
 class PatchDrafts(rest_handler.RESTCollectionHandler):
@@ -302,7 +304,7 @@ class PatchDrafts(rest_handler.RESTCollectionHandler):
     raise ndb.Return(draft.to_dict())
 
   @ndb.transactional_tasklet
-  def put(self, key, drafts):
+  def put(self, key, *drafts):
     mdata = yield self._lookup_mdata(key)
     mdata.clear_drafts()
     drafts = yield [mdata.add_draft_async(key.parent(), **d) for d in drafts]
@@ -329,13 +331,16 @@ class Messages(rest_handler.RESTCollectionHandler):
 
     # Ensure that referenced patchset/message exist and are accessible by the
     # current user.
-    patchset = utils.NONE_FUTURE
+    patchsets = utils.completed_future({})
     if patchset_id:
-      patchset = issue.patchsets_async[patchset_id]
-    message = utils.NONE_FUTURE
+      patchsets = issue.patchsets_async[patchset_id]
+    messages = utils.completed_future({})
     if reply_message_id:
-      message = issue.messages_async[reply_message_id]
-    patchset, message, metadata = yield patchset, message, mdata_future
+      messages = issue.messages_async[reply_message_id]
+    patchsets, messages, metadata = yield patchsets, messages, mdata_future
+
+    patchset = messages.get(patchset_id)
+    message = patchsets.get(reply_message_id)
 
     drafts = metadata.drafts.values()
     metadata.clear_drafts()
@@ -351,9 +356,14 @@ class Messages(rest_handler.RESTCollectionHandler):
     yield issue.flush_to_ds_async(), metadata.put_async()
     raise ndb.Return(msg.to_dict())
 
+  @ndb.tasklet
   def get(self, key):
     issue = yield safe_get(key.parent())
-    raise ndb.Return([m.to_dict() for m in (yield issue.messages_async)])
+    messages = yield issue.messages_async
+    raise ndb.Return([m.to_dict() for m in messages.itervalues()])
 
+  @ndb.tasklet
   def get_one(self, key):
-    raise ndb.Return((yield safe_get(key)).to_dict())
+    issue = yield safe_get(key.parent())
+    messages = yield issue.messages_async
+    raise ndb.Return(messages[key.id()].to_dict())

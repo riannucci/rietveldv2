@@ -44,3 +44,14 @@ def Execute(api):
   api.GET('issues/%d/patchsets/1/comments' % iid)
 
   api.GET('issues/%d/patchsets/1/comments/2' % iid)
+
+  # TODO(iannucci): Add test for 'next_with_comment', etc. Requires a
+  # multi-patch Patchset.
+
+  api.GET('issues/%d/patchsets/1/patches/1/comments' % iid)
+
+  api.GET('issues/%d/patchsets/1/patches/1/comments/1' % iid)
+
+  api.GET('issues/%d/messages' % iid)
+
+  api.GET('issues/%d/messages/1' % iid)

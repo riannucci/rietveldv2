@@ -71,6 +71,11 @@ class IDIndexedCollection(collections.MutableMapping):
     self[id] = value
     return id
 
+  def skip_append(self, id, value):
+    while len(self._items) + 1 < id:
+      self.append(None)
+    self[id] = value
+
   def __iter__(self):
     return (i + 1 for i, item in enumerate(self._items) if item is not None)
 
@@ -160,7 +165,7 @@ class Patch(diff.DiffablePair):
   def __init__(self, id, old, new, action):
     super(Patch, self).__init__(old, new, action)
     self.id = id
-    self.comments = []
+    self.comments = IDIndexedCollection('$Comment')
     self.next = None
     self.prev = None
     self.next_with_comment = None
@@ -532,16 +537,20 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin,
     all_patches = yield self.data_ref.data_async()
     all_patches.parent_key = self.key
 
-    comments_by_patch = {}
+    comments_by_patch = collections.defaultdict(list)
     for c in self.comments.itervalues():
-      comments_by_patch.setdefault(c.patch, []).append(c)
+      comments_by_patch[c.patch_id].append(c)
 
     prev = None
     prev_with_comment = None
     for p in all_patches.itervalues():
       p.prev = prev
       p.prev_with_comment = prev_with_comment
-      p.comments = comments_by_patch.get(p.id, [])
+
+      p.comments.parent_key = ndb.Key('$Patch', p.id, parent=self.key)
+      for c in comments_by_patch[p.id]:
+        p.comments.skip_append(c.id, c)
+
       prev = p
       if p.comments:
         prev_with_comment = p
@@ -570,6 +579,7 @@ class Patchset(authed_model.AuthedModel, mixins.HideableModelMixin,
   #### Entity manipulation
   @ndb.tasklet
   def add_comment_async(self, data):
+    # TODO(iannucci): Make this also update the comments in Patches
     assert 'created' not in data
     assert 'owner' not in data
     assert 'modified' not in data
@@ -667,8 +677,7 @@ class Message(authed_model.AuthedModel, mixins.HierarchyMixin,
     issue = yield self.root_async
     patchsets = yield issue.patchsets_async
     raise ndb.Return(
-      [patchsets[psid].comments[cid]
-       for psid, cid in self.comment_ids.values()])
+      [patchsets[psid].comments[cid] for psid, cid in self.comment_ids])
 
   #### AuthedModel overrides
   @classmethod
@@ -677,6 +686,14 @@ class Message(authed_model.AuthedModel, mixins.HierarchyMixin,
 
   def can_read(self):
     return self.root_async.get_result().can('read')
+
+  #### Model overrides
+  def to_dict(self, include=None, exclude=None):
+    exclude = set(exclude or ())
+    exclude.add('comment_ids')
+    ret = super(Message, self).to_dict(include=include, exclude=exclude)
+    ret['comments'] = [c.to_dict() for c in self.comments_async.get_result()]
+    return ret
 
 
 class DraftComment(Comment):
