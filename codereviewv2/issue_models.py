@@ -27,6 +27,7 @@ from framework import (utils, mixins, exceptions, authed_model, account,
                        query_parser)
 
 from framework.monkeypatch import fix_ndb_hook_context  # pylint: disable=W0611
+from framework.monkeypatch import post_hook_exceptions  # pylint: disable=W0611
 
 from . import auth_models, diff
 
@@ -46,7 +47,7 @@ class IDIndexedCollection(collections.MutableMapping):
     return ndb.Key(pairs=self.parent_key.pairs() + ((self._name, id),))
 
   def __getitem__(self, id):
-    if not isinstance(id, int) or id < 1 or id > len(self):
+    if not isinstance(id, int) or id < 1 or id > len(self._items):
       raise exceptions.NotFound(self._key_for_id(id))
     item = self._items[id - 1]
     if item is None:

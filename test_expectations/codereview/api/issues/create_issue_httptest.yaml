@@ -322,6 +322,16 @@
       status:
         code: 200
         type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/4'
+  response:
+    code: 404
+    json:
+      data:
+        msg: Key('Issue', 5629499534213120, 'Patchset', 1, '$Patches', 4) was not
+          found.
+      status:
+        code: 404
+        type: ERROR
 - request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/diff'
   response:
     code: 200
@@ -361,6 +371,24 @@
     code: 200
     json:
       data: null
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets'
+  response:
+    code: 200
+    json:
+      data:
+      - comments: []
+        created: '2013-12-27 02:26:36.354086'
+        created_by: test@example.com
+        data_ref:
+          charset: utf-8
+          content_type: application/patchset+json
+          csum: f7c3d60ba1aae3736fea41c8741ea92c115bed59afdeb2c93bc8644d88916366
+          size: 519
+        id: 2
+        message: null
       status:
         code: 200
         type: OK

@@ -182,11 +182,15 @@ def Execute(api):
 
   api.GET('issues/%d/patchsets/1/patches/1' % iid)
 
+  api.GET('issues/%d/patchsets/1/patches/4' % iid)
+
   api.GET('issues/%d/patchsets/1/patches/1/diff' % iid)
 
   api.GET('issues/%d/patchsets/1/patches/1/diff/2/1' % iid)
 
   api.DELETE('issues/%d/patchsets/1' % iid, xsrf=xsrf)
+
+  api.GET('issues/%d/patchsets' % iid)
 
   api.GET('issues/%d/patchsets/1' % iid)
 

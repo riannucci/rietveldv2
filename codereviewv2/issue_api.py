@@ -127,7 +127,8 @@ class Patchsets(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get(self, key):
     issue = yield safe_get(key.parent())
-    psets = [x.to_dict() for x in (yield issue.patchsets_async).itervalues()]
+    patchsets = yield issue.patchsets_async
+    psets = [x.to_dict() for x in patchsets.itervalues()]
     raise ndb.Return(psets)
 
   @ndb.tasklet
