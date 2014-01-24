@@ -70,7 +70,7 @@ class Issues(rest_handler.RESTCollectionHandler,
     ]
 
     yield issue.flush_to_ds_async()
-    raise ndb.Return({STATUS_CODE: 201, 'data': issue.to_dict()})
+    raise ndb.Return(issue.to_dict())
 
   @ndb.tasklet
   def get_one(self, key):
@@ -119,10 +119,10 @@ class Patchsets(rest_handler.RESTCollectionHandler):
   def post(self, key, patchset=None, message=None, proofs=None):
     pset_cas_id = cas.models.CAS_ID.from_dict(patchset)
     ownership_proof_fut = pset_cas_id.prove_async(proofs, 'add patchset')
-    issue, _ = yield safe_get(key.parent())
+    issue = yield safe_get(key.parent())
     ps = yield issue.add_patchset_async(ownership_proof_fut, message=message)
     yield issue.flush_to_ds_async()
-    raise ndb.Return({STATUS_CODE: 201, 'data': ps.to_dict()})
+    raise ndb.Return(ps.to_dict())
 
   @ndb.tasklet
   def get(self, key):
@@ -178,8 +178,7 @@ class Comments(rest_handler.RESTCollectionHandler):
   @ndb.tasklet
   def get(self, key):
     ps = yield safe_get(key.parent())
-    ret = [c.to_dict() for c in ps.comments]
-    raise ndb.Return(ret)
+    raise ndb.Return([c.to_dict() for c in ps.comments.itervalues()])
 
   @ndb.tasklet
   def get_one(self, key):
@@ -220,8 +219,11 @@ class Patches(rest_handler.RESTCollectionHandler):
 
   @ndb.tasklet
   def get_one_diff2(self, key, right_ps_id, right_p_id, mode='git'):
+    right_ps_id = int(right_ps_id)
+    right_p_id = int(right_p_id)
+
     issue_key = key.parent().parent()
-    right_key = ndb.Key(pairs=issue_key.pairs() + [('Patchset', right_ps_id)])
+    right_key = ndb.Key('Patchset', right_ps_id, parent=issue_key)
 
     left_patchset, right_patchset = yield [
       safe_get(key.parent()),
@@ -347,7 +349,7 @@ class Messages(rest_handler.RESTCollectionHandler):
       drafts=drafts, message=message, patchset=patchset, **data)
 
     yield issue.flush_to_ds_async(), metadata.put_async()
-    raise ndb.Return({STATUS_CODE: 201, 'data': msg.to_dict()})
+    raise ndb.Return(msg.to_dict())
 
   def get(self, key):
     issue = yield safe_get(key.parent())

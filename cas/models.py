@@ -196,7 +196,9 @@ class CAS_ID(object):
     # the CASEntry first).
     data_keys = CASData.keys(self.key)
     data_objs = filter(bool, (yield ndb.get_multi_async(data_keys)))
-    if len(data_objs) > 1:
+    if not data_objs:
+      raise exceptions.NotFound(self.key)
+    elif len(data_objs) > 1:
       data_obj = sorted(data_objs, key=lambda x: x.timestamp)
     else:
       data_obj = data_objs[0]

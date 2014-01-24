@@ -40,3 +40,7 @@ def Execute(api):
   api.POST('issues/%d/messages' % iid, xsrf=gnarly_xsrf, json={
     'lead_text': 'LgTm!',
   })
+
+  api.GET('issues/%d/patchsets/1/comments' % iid)
+
+  api.GET('issues/%d/patchsets/1/comments/2' % iid)

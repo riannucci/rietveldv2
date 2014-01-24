@@ -157,14 +157,6 @@ class Content(diff.Diffable):
 
 
 class Patch(diff.DiffablePair):
-  @classmethod
-  def from_dict(cls, id, patch):
-    old = Content(patch.pop('old')) if 'old' in patch else None
-    new = Content(patch.pop('new')) if 'new' in patch else None
-    action = patch.pop('action', None)
-    assert not patch
-    return cls(id, old, new, action)
-
   def __init__(self, id, old, new, action):
     super(Patch, self).__init__(old, new, action)
     self.id = id
@@ -173,6 +165,14 @@ class Patch(diff.DiffablePair):
     self.prev = None
     self.next_with_comment = None
     self.prev_with_comment = None
+
+  @classmethod
+  def from_dict(cls, id, patch):
+    old = Content(patch.pop('old')) if 'old' in patch else None
+    new = Content(patch.pop('new')) if 'new' in patch else None
+    action = patch.pop('action', None)
+    assert not patch
+    return cls(id, old, new, action)
 
   def get_data_futures(self):
     return [self.old.data_async, self.new.data_async,

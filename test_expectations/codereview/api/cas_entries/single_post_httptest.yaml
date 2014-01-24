@@ -25,7 +25,7 @@
         type: OK
 - request: POST 'codereview/api/v2/cas_entries/bab6c9bbdbb47f82f67b04b5f1fcaab8ef2e300fd4e13a5fcff2db3e51e3ad52:1024:application/octet-stream'
   response:
-    code: 200
+    code: 201
     json:
       data:
         content_type: application/octet-stream
@@ -33,5 +33,5 @@
         salt: 7Ubnq0bGIaEjqcVLCei9sDYMs8c9Pu3RLgQK3O3q4RU=
         size: 1024
       status:
-        code: 200
+        code: 201
         type: OK

@@ -14,23 +14,23 @@
     raw: []
 - request: POST 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts'
   response:
-    code: 200
+    code: 201
     json:
       data:
         body: 'I like this line very much.
 
           Maybe if it had more syllables?'
         context_line: The lake gently beckons you
-        created: '2013-12-27 02:28:04.724024'
+        created: '2013-12-27 02:29:37.429389'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:04.724024'
+        modified: '2013-12-27 02:29:37.429389'
         owner: test@example.com
         patch_id: 1
         patchset_id: 1
         side: old
       status:
-        code: 200
+        code: 201
         type: OK
 - request: PUT 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts/1'
   response:
@@ -39,10 +39,10 @@
       data:
         body: I do not really like this line at all...
         context_line: The lake gently beckons you
-        created: '2013-12-27 02:28:04.724024'
+        created: '2013-12-27 02:29:37.429389'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:24.941115'
+        modified: '2013-12-27 02:29:47.665609'
         owner: test@example.com
         patch_id: 1
         patchset_id: 1
@@ -57,10 +57,10 @@
       data:
       - body: I do not really like this line at all...
         context_line: The lake gently beckons you
-        created: '2013-12-27 02:28:04.724024'
+        created: '2013-12-27 02:29:37.429389'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:24.941115'
+        modified: '2013-12-27 02:29:47.665609'
         owner: test@example.com
         patch_id: 1
         patchset_id: 1
@@ -75,10 +75,10 @@
       data:
         body: I do not really like this line at all...
         context_line: The lake gently beckons you
-        created: '2013-12-27 02:28:04.724024'
+        created: '2013-12-27 02:29:37.429389'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:28:24.941115'
+        modified: '2013-12-27 02:29:47.665609'
         owner: test@example.com
         patch_id: 1
         patchset_id: 1

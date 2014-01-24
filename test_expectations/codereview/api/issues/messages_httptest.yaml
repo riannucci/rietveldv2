@@ -1,20 +1,20 @@
 - request: POST 'codereview/api/v2/issues/5629499534213120/patchsets/1/patches/1/drafts'
   response:
-    code: 200
+    code: 201
     json:
       data:
         body: This line is kinda meh though
         context_line: Waters move softly
-        created: '2013-12-27 02:27:31.575679'
+        created: '2013-12-27 02:28:46.485788'
         id: 2
         lineno: 1
-        modified: '2013-12-27 02:27:31.575679'
+        modified: '2013-12-27 02:28:46.485788'
         owner: test@example.com
         patch_id: 1
         patchset_id: 1
         side: new
       status:
-        code: 200
+        code: 201
         type: OK
 - request: GET 'codereview/api/v2/issues/5629499534213120/drafts'
   response:
@@ -25,20 +25,20 @@
 
           Maybe if it had more syllables?'
         context_line: The lake gently beckons you
-        created: '2013-12-27 02:26:58.653852'
+        created: '2013-12-27 02:27:53.570839'
         id: 1
         lineno: 2
-        modified: '2013-12-27 02:27:31.575679'
+        modified: '2013-12-27 02:28:46.485788'
         owner: test@example.com
         patch_id: 1
         patchset_id: 1
         side: old
       - body: This line is kinda meh though
         context_line: Waters move softly
-        created: '2013-12-27 02:27:31.575679'
+        created: '2013-12-27 02:28:46.485788'
         id: 2
         lineno: 1
-        modified: '2013-12-27 02:27:31.575679'
+        modified: '2013-12-27 02:28:46.485788'
         owner: test@example.com
         patch_id: 1
         patchset_id: 1
@@ -53,10 +53,10 @@
       data:
         body: This line is kinda meh though
         context_line: Waters move softly
-        created: '2013-12-27 02:27:31.575679'
+        created: '2013-12-27 02:28:46.485788'
         id: 2
         lineno: 1
-        modified: '2013-12-27 02:27:31.575679'
+        modified: '2013-12-27 02:28:46.485788'
         owner: test@example.com
         patch_id: 1
         patchset_id: 1
@@ -76,7 +76,7 @@
           - 1
         - - 1
           - 2
-        created: '2013-12-27 02:28:46.485788'
+        created: '2013-12-27 02:30:18.551503'
         id: 1
         issue_was_closed: false
         lead_text: Some really helpful comments!
@@ -103,19 +103,19 @@
     code: 200
     json:
       data:
-        created: '2013-12-27 02:30:18.451503'
+        created: '2013-12-27 02:32:20.829875'
         default_column_width: 80
         default_context: 10
         email: bob@gnarly.com
         fresh: true
         lower_email: bob@gnarly.com
         lower_nickname: bob (544)
-        modified: '2013-12-27 02:30:18.451503'
+        modified: '2013-12-27 02:32:20.829875'
         nickname: bob (544)
         notify_by_chat: false
         notify_by_email: true
         user: bob@gnarly.com
-        xsrf: eyJzdGFtcCI6IDEzODgxMTE0MTgsICJ0YWciOiAiNzZjOGRjOWFmMmUwODEzMWEwNDMxMGY0ODYxOGEyMGRmMGY0ZDk3ZTNmOTliZWJjODA5ZDFiOTQ5ZTgxOTZlNiJ9
+        xsrf: eyJzdGFtcCI6IDEzODgxMTE1NDAsICJ0YWciOiAiYWVjMGUxMDJiMzkxNGI3NWU2NzFkNzEyMTY0MjEzZDhlYzhiYmU3NDFlYzk4ODNjMzRmMTY2YzM0ZDUzZmU1ZiJ9
       status:
         code: 200
         type: OK
@@ -127,7 +127,7 @@
         cc:
         - coolguy@fancydomain.co.uk
         comment_ids: []
-        created: '2013-12-27 02:30:56.412568'
+        created: '2013-12-27 02:32:38.626175'
         id: 2
         issue_was_closed: false
         lead_text: LgTm!
@@ -140,4 +140,49 @@
         - test@example.com
       status:
         code: 201
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/comments'
+  response:
+    code: 200
+    json:
+      data:
+      - body: 'I like this line very much.
+
+          Maybe if it had more syllables?'
+        context_line: The lake gently beckons you
+        created: '2013-12-27 02:30:18.551503'
+        id: 1
+        lineno: 2
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: old
+      - body: This line is kinda meh though
+        context_line: Waters move softly
+        created: '2013-12-27 02:30:18.551503'
+        id: 2
+        lineno: 1
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: new
+      status:
+        code: 200
+        type: OK
+- request: GET 'codereview/api/v2/issues/5629499534213120/patchsets/1/comments/2'
+  response:
+    code: 200
+    json:
+      data:
+        body: This line is kinda meh though
+        context_line: Waters move softly
+        created: '2013-12-27 02:30:18.551503'
+        id: 2
+        lineno: 1
+        owner: test@example.com
+        patch_id: 1
+        patchset_id: 1
+        side: new
+      status:
+        code: 200
         type: OK

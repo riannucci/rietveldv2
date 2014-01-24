@@ -14,6 +14,10 @@
 
 """API for the Content Addressed Store"""
 
+import gzip
+
+from cStringIO import StringIO
+
 from google.appengine.ext import ndb
 
 from framework import rest_handler, utils, exceptions
@@ -106,6 +110,10 @@ class CASEntries(rest_handler.RESTCollectionHandler):
   @rest_handler.skip_process_request
   @ndb.tasklet
   def post_one(self, key, request):
-    ent = yield models.CAS_ID.from_key(key).create_async(request.read())
+    fhandle = request
+    if request.META.get('HTTP_CONTENT_ENCODING', None) == 'gzip':
+      # request's file-like interface doesn't support tell()...
+      fhandle = gzip.GzipFile(fileobj=StringIO(fhandle.read()), mode='r')
+    ent = yield models.CAS_ID.from_key(key).create_async(fhandle.read())
     raise ndb.Return(ent.to_dict())
 

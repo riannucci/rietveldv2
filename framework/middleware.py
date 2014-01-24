@@ -124,6 +124,12 @@ class JSONResponseMiddleware(Middleware):
     # TODO(iannucci): Make this know about various types
     return str(obj)
 
+  def _default_status(self, request):
+    if request.method == 'POST':
+      return 201
+    else:
+      return 200
+
   def post(self, request, result):
     result = result or {}
     if isinstance(result, HttpResponse):
@@ -132,7 +138,7 @@ class JSONResponseMiddleware(Middleware):
     if not isinstance(result, dict):
       result = {'data': result}
     headers = result.pop(HEADERS, {})
-    code = result.pop(STATUS_CODE, 200)
+    code = result.pop(STATUS_CODE, self._default_status(request))
     if 'status' not in result:
       status = 'UNKNOWN'
       if 100 <= code < 200:

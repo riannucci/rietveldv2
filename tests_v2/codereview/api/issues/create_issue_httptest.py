@@ -86,6 +86,34 @@ PATCHSET = json.dumps({
 PATCHSET_CAS_ID = cas_id(PATCHSET, 'application/patchset+json')
 PATCHSET_CAS_ID_STR = cas_id_str(PATCHSET_CAS_ID)
 
+FILE_AFTER_2 = """
+Waters move quickly
+The hat gently pokes you
+Put it on your face
+"""
+FILE_AFTER_2_CAS_ID = cas_id(FILE_AFTER_2)
+
+PATCHSET_2 = json.dumps({
+  'patches': [
+    {
+      'action': 'rename',
+      'old': {
+        'data': FILE_BEFORE_CAS_ID,
+        'path': 'path/to/haiku.txt', 'mode': 0100644,
+        'timestamp': 'fake timestamp'
+      },
+      'new': {
+        'data': FILE_AFTER_2_CAS_ID,
+        'path': 'different/path/to/haiku.txt', 'mode': 0100644,
+        'timestamp': 'different fake timestamp'
+      }
+    }
+  ]
+})
+PATCHSET_2_CAS_ID = cas_id(PATCHSET_2, 'application/patchset+json')
+PATCHSET_2_CAS_ID_STR = cas_id_str(PATCHSET_2_CAS_ID)
+
+
 def set_up_single_issue(api):
   api.login()
   xsrf = api.GET('accounts/me').json['data']['xsrf']
@@ -107,6 +135,22 @@ def set_up_single_issue(api):
     'subject': 'A totes awesome haiku',
   }
   iid = api.POST('issues', json=issue, xsrf=xsrf).json['data']['id']
+
+  ent = api.POST('cas_entries/%s' % cas_id_str(FILE_AFTER_2_CAS_ID),
+                 data=FILE_AFTER_2, xsrf=xsrf, compress=True).json['data']
+  api.POST('cas_entries/%s' % PATCHSET_2_CAS_ID_STR,
+           data=PATCHSET_2, xsrf=xsrf, compress=True)
+
+  api.POST(
+    'issues/%d/patchsets' % iid,
+    json={
+      'patchset': PATCHSET_2_CAS_ID,
+      'proofs': {
+        FILE_BEFORE_CAS_ID['csum']: prove(xsrf, FILE_BEFORE, ents[0]['salt']),
+        FILE_AFTER_2_CAS_ID['csum']: prove(xsrf, FILE_AFTER_2, ent['salt'])
+      }
+    },
+    xsrf=xsrf)
 
   api.GET('issues/%d' % iid)
 
@@ -139,6 +183,8 @@ def Execute(api):
   api.GET('issues/%d/patchsets/1/patches/1' % iid)
 
   api.GET('issues/%d/patchsets/1/patches/1/diff' % iid)
+
+  api.GET('issues/%d/patchsets/1/patches/1/diff/2/1' % iid)
 
   api.DELETE('issues/%d/patchsets/1' % iid, xsrf=xsrf)
 
