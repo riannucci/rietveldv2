@@ -132,8 +132,8 @@ class HttpTestApi(object):
         # trim trailing \n
         if k.pop('compress', False):
           param = StringIO()
-          gfile = gzip.GzipFile(fileobj=param, mode='w')
-          json.dump(j, gfile)
+          gfile = gzip.GzipFile(fileobj=param, mode='w', mtime=0)
+          json.dump(j, gfile, sort_keys=True)
           gfile.close()
           k['params'] = {
             'json': param.getvalue().encode('base64')[:-1],
