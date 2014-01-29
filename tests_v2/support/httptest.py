@@ -58,7 +58,10 @@ class EasyResponse(object):
 
     self.response = response
     self.code = response.status_code
-    self.json = scrub(response.json, self.STANDARD_REPLACEMENTS)
+    try:
+      self.json = scrub(response.json(), self.STANDARD_REPLACEMENTS)
+    except ValueError:
+      self.json = None
     self.raw = scrub(response.text.splitlines(), self.STANDARD_REPLACEMENTS)
 
   def to_dict(self):
